@@ -28,7 +28,7 @@ interface IUser extends Document {
 // Schema Definition
 const userSchema = new Schema<IUser>({
     name: { type: String },  // Optional
-    email: { 
+    email: {
         type: String,
         sparse: true,  // Allows multiple null/undefined values with unique index
         unique: true   // Only enforced if email is provided
@@ -60,6 +60,6 @@ const userSchema = new Schema<IUser>({
 userSchema.index({ location: '2dsphere' });
 userSchema.index({ phone: 1 }, { unique: true });
 
-const User: Model<IUser> = model<IUser>('User', userSchema);
 
+const User: Model<IUser> = model<IUser>('User', userSchema);
 export default User;

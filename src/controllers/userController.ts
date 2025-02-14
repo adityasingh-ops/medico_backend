@@ -16,7 +16,7 @@ export const sendOTP = async (req: Request, res: Response) => {
         const response = await axios.get(
             `https://2factor.in/API/V1/${process.env.TWO_FACTOR_API_KEY}/SMS/${phone}/AUTOGEN`
         );
-
+  
         if (response.data.Status === 'Success') {
             res.json({
                 message: 'OTP sent successfully',
