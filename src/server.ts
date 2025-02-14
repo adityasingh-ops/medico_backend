@@ -12,6 +12,7 @@ import mongoose from 'mongoose';
 
 // Import routes
 import userRoutes from './routes/userRoutes';
+import categoryRoutes from './routes/categoryRoutes';
 
 const app: Express = express();
 
@@ -27,11 +28,16 @@ const app: Express = express();
 })();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/users', userRoutes);
+app.use('/api/categories', categoryRoutes);
 
 // Root route
 app.get('/', (req: Request, res: Response) => {
@@ -47,8 +53,12 @@ const PORT: number = parseInt(process.env.PORT || '5000', 10);
 
 const httpServer = createServer(app);
 
-httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// httpServer.listen(PORT, () => {
+//   console.log(`Server running on port ${PORT}`);
+// });
+
+httpServer.listen(PORT, '192.168.1.4', () => {
+  console.log(`Server running on http://192.168.1.4:${PORT}`);
 });
 
 // Handle process termination
