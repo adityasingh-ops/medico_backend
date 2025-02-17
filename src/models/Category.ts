@@ -12,6 +12,7 @@ export interface ICategory extends Document {
 }
 
 const categorySchema = new Schema({
+  
   name: { 
     type: String, 
     required: true,

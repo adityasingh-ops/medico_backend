@@ -13,6 +13,8 @@ import mongoose from 'mongoose';
 // Import routes
 import userRoutes from './routes/userRoutes';
 import categoryRoutes from './routes/categoryRoutes';
+import medicineRoutes from './routes/medicineRoutes';
+import storeRoutes from './routes/storeRoutes';
 
 const app: Express = express();
 
@@ -38,6 +40,8 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/users', userRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/medicines', medicineRoutes);
+app.use('/api/stores', storeRoutes);
 
 // Root route
 app.get('/', (req: Request, res: Response) => {
@@ -57,9 +61,12 @@ const httpServer = createServer(app);
 //   console.log(`Server running on port ${PORT}`);
 // });
 
-httpServer.listen(PORT, '192.168.1.4', () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://192.168.1.4:${PORT}`);
 });
+// httpServer.listen(PORT, '0.0.0.0', () => {
+//   console.log(`Server running on http://192.168.1.4:${PORT}`);
+// });
 
 // Handle process termination
 process.on('SIGINT', async () => {
