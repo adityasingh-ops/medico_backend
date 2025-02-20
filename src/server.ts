@@ -15,6 +15,7 @@ import userRoutes from './routes/userRoutes';
 import categoryRoutes from './routes/categoryRoutes';
 import medicineRoutes from './routes/medicineRoutes';
 import storeRoutes from './routes/storeRoutes';
+import cartRoutes from './routes/cartRoutes';
 
 const app: Express = express();
 
@@ -42,6 +43,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/medicines', medicineRoutes);
 app.use('/api/stores', storeRoutes);
+app.use('/api/cart', cartRoutes);
 
 // Root route
 app.get('/', (req: Request, res: Response) => {
@@ -61,8 +63,11 @@ const httpServer = createServer(app);
 //   console.log(`Server running on port ${PORT}`);
 // });
 
-httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://192.168.1.4:${PORT}`);
+// httpServer.listen(PORT, '0.0.0.0', () => {             ///my flat
+//   console.log(`Server running on http://192.168.1.4:${PORT}`);
+// });
+httpServer.listen(PORT, '0.0.0.0', () => {          //stanza   
+  console.log(`Server running on http://10.51.2.200:${PORT}`);
 });
 // httpServer.listen(PORT, '0.0.0.0', () => {
 //   console.log(`Server running on http://192.168.1.4:${PORT}`);
