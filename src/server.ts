@@ -16,6 +16,7 @@ import categoryRoutes from './routes/categoryRoutes';
 import medicineRoutes from './routes/medicineRoutes';
 import storeRoutes from './routes/storeRoutes';
 import cartRoutes from './routes/cartRoutes';
+import searchRoutes from './routes/searchRoutes';
 
 const app: Express = express();
 
@@ -44,7 +45,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/medicines', medicineRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/cart', cartRoutes);
-
+app.use('/api/search', searchRoutes);
 // Root route
 app.get('/', (req: Request, res: Response) => {
   res.send('Medico API is running...');
