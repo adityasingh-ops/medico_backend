@@ -33,6 +33,7 @@ export interface SendOTPRequest {
     name?: string;
     email?: string;
     phone?: string;
+    storeId?: string; 
     profilePicture?: string;
     isEmailVerified: boolean;
     isPhoneVerified: boolean;

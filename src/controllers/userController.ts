@@ -96,24 +96,20 @@ export const loginStore = async (req: Request, res: Response) => {
         }
 
         // Find store by email
-        const store = await Store.findOne({ email });
-        if (!store) {
+        const storeUser = await User.findOne({ email });
+        if (!storeUser) {
             return res.status(401).json({
                 success: false,
                 message: 'Invalid credentials'
             });
         }
 
-        // Check if store is active
-        if (!store.isActive) {
-            return res.status(401).json({
-                success: false,
-                message: 'Store account is inactive'
-            });
-        }
+        // Find store ID from Store collection
+        const store = await Store.findOne({ email }).select('_id');
+        const storeId = store?._id || null;
 
         // Verify password
-        const isPasswordValid = await bcrypt.compare(password, store.password);
+        const isPasswordValid = await bcrypt.compare(password, storeUser.password!);
         if (!isPasswordValid) {
             return res.status(401).json({
                 success: false,
@@ -124,8 +120,9 @@ export const loginStore = async (req: Request, res: Response) => {
         // Generate JWT token
         const token = jwt.sign(
             { 
-                id: store._id, 
-                type: 'store'
+                id: storeUser._id, 
+                type: 'store',
+                storeId: storeId // Include storeId in token
             },
             process.env.JWT_SECRET || 'your-secret-key',
             { expiresIn: '30d' }
@@ -135,14 +132,12 @@ export const loginStore = async (req: Request, res: Response) => {
         res.json({
             success: true,
             data: {
-                _id: store._id,
-                name: store.name,
-                email: store.email,
-                phone: store.phone,
-                address: store.address,
-                isVerified: store.isVerified,
-                isActive: store.isActive,
-                storeType: store.storeType,
+                _id: storeUser._id,
+                storeId: storeId,
+                name: storeUser.name,
+                email: storeUser.email,
+                phone: storeUser.phone,
+                address: storeUser.address,
                 token
             }
         });

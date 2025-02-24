@@ -16,6 +16,7 @@ interface IUser extends Document {
     email?: string;
     password?: string;
     phone: string;  // Only phone is required
+    storeId?: Schema.Types.ObjectId; 
     address?: IAddress[];
     isPhoneVerified: boolean;
     isStoreVerified?: boolean;  
@@ -41,6 +42,7 @@ const userSchema = new Schema<IUser>({
     password: { type: String },  // Optional
     phone: { type: String, required: true, unique: true }, 
     isPhoneVerified: { type: Boolean, default: false },
+    storeId: { type: Schema.Types.ObjectId, ref: 'Store' },
     address: [{
         street: String,
         city: String,

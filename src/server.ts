@@ -64,12 +64,12 @@ const httpServer = createServer(app);
 //   console.log(`Server running on port ${PORT}`);
 // });
 
-// httpServer.listen(PORT, '0.0.0.0', () => {             ///my flat
-//   console.log(`Server running on http://192.168.1.4:${PORT}`);
-// });
-httpServer.listen(PORT, '0.0.0.0', () => {          //stanza   
-  console.log(`Server running on http://10.51.2.200:${PORT}`);
+httpServer.listen(PORT, '0.0.0.0', () => {             ///my flat
+  console.log(`Server running on http://192.168.1.7:${PORT}`);
 });
+// httpServer.listen(PORT, '0.0.0.0', () => {          //stanza   
+//   console.log(`Server running on http://10.51.2.200:${PORT}`);
+// });
 // httpServer.listen(PORT, '0.0.0.0', () => {
 //   console.log(`Server running on http://192.168.1.4:${PORT}`);
 // });

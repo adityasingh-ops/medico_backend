@@ -11,7 +11,98 @@ export class MedicineController {
             return res.status(400).json({ error: error.message });
         }
     }
+    async updateStores(req: Request, res: Response) {
+        try {
+            const { medicineId, storeIds } = req.body;
+            const medicine = await Medicine.findByIdAndUpdate(
+                medicineId,
+                {
+                    $addToSet: { stores: { $each: storeIds } },
+                    updatedAt: new Date()
+                },
+                { new: true }
+            ).populate('stores');
 
+            if (!medicine) {
+                return res.status(404).json({ error: 'Medicine not found' });
+            }
+            return res.json(medicine);
+        } catch (error: any) {
+            return res.status(400).json({ error: error.message });
+        }
+    }
+    async getMedicinesByStore(req: Request, res: Response) {
+        try {
+            const { storeId } = req.params;
+            console.log('storeId:------------->>>>>>>', storeId);
+            // Use $in operator to check if storeId exists in the stores array
+            const medicines = await Medicine.find({ 
+                stores: { $in: [storeId] }
+            })
+            console.log('medicines:------------->>>>>>>', medicines);
+    
+            return res.json({
+                success: true,
+                medicines: medicines
+            });
+    
+        } catch (error: any) {
+            console.error('Error in getMedicinesByStore:', error);
+            return res.status(500).json({
+                error: 'Failed to fetch medicines',
+                details: error.message
+            });
+        }
+    }
+    async bulkUpdateStore(req: Request, res: Response) {
+        try {
+            const { medicineIds, storeId } = req.body;
+
+            console.log('medicineIds:----------->>>>>>>', medicineIds);
+            console.log('storeId:------------->>>>>>>>>', storeId);
+
+            if (!Array.isArray(medicineIds) || !storeId) {
+                return res.status(400).json({
+                    error: 'medicineIds must be an array and storeId is required'
+                });
+            }
+
+
+
+            // Update medicines that don't have this store in their stores array
+            const result = await Medicine.updateMany(
+                {
+                    _id: { $in: medicineIds },
+                    stores: { $ne: storeId } // Only update if storeId is not in the stores array
+                },
+                {
+                    $addToSet: { stores: storeId },
+                    $set: { updatedAt: new Date() }
+                }
+            );
+
+            console.log('result:------------->>>>>>>', result);
+
+            // Fetch updated medicines with populated fields
+            const updatedMedicines = await Medicine.find({
+                _id: { $in: medicineIds }
+            })
+                .populate('categoryId')
+                .populate('stores');
+
+            return res.json({
+                message: `Updated ${result.modifiedCount} medicines`,
+                medicines: updatedMedicines
+            });
+
+
+        } catch (error: any) {
+            console.error('Error in bulkUpdateStore:', error);
+            return res.status(400).json({
+                error: error.message
+            });
+        }
+    }
     async getAll(req: Request, res: Response) {
         try {
             const { tags, store, category } = req.query;
@@ -38,11 +129,11 @@ export class MedicineController {
                 .sort({ createdAt: -1 });
 
             if (!medicines.length) {
-                return res.status(404).json({ 
-                    message: 'No medicines found in this category' 
+                return res.status(404).json({
+                    message: 'No medicines found in this category'
                 });
             }
-
+            console.log('medicines:------------->>>>>>>', medicines);
             return res.json(medicines);
         } catch (error: any) {
             return res.status(500).json({
@@ -50,7 +141,27 @@ export class MedicineController {
             });
         }
     }
+    async getMedicineNotInStore(req: Request, res: Response) {
+        try {
+            const { storeId } = req.params;
 
+            const medicines = await Medicine.find({ stores: { $ne: storeId } })
+                .populate('categoryId')
+                .populate('stores');
+
+            return res.json({
+                success: true,
+                medicines: medicines // Wrap medicines in an object
+            });
+
+        } catch (error: any) {
+            console.error('Error fetching medicines:', error);
+            return res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    }
     async getById(req: Request, res: Response) {
         try {
             const medicine = await Medicine.findById(req.params.id)
@@ -113,7 +224,7 @@ export class MedicineController {
             }
 
             // Create all medicines
-            const medicines = await Medicine.insertMany(req.body, { 
+            const medicines = await Medicine.insertMany(req.body, {
                 ordered: false, // Continue inserting even if some documents error
                 rawResult: true // Get detailed information about the insert
             });
