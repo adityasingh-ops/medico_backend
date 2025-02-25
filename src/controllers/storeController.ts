@@ -159,7 +159,7 @@ export class StoreController {
       const { longitude, latitude, maxDistance = 5000 } = req.query; // maxDistance in meters
 
       const stores = await Store.find({
-        location: {
+        location: { 
           $near: {
             $geometry: {
               type: 'Point',
