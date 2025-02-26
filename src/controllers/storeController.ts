@@ -69,6 +69,7 @@ export class StoreController {
         password: hashedPassword,
         phone: req.body.phone,
         userType: 'store',
+        storeId: store._id, // Include store ID reference
         address: [{
           street: req.body.address.street,
           city: req.body.address.city,
@@ -84,7 +85,11 @@ export class StoreController {
 
       // Generate JWT token
       const token = jwt.sign(
-        { id: store._id, type: 'store' },
+        { 
+          id: user._id, 
+          type: 'store',
+          storeId: store._id 
+        },
         process.env.JWT_SECRET!,
         { expiresIn: '30d' }
       );
@@ -134,6 +139,99 @@ export class StoreController {
       res.status(500).json({
         success: false,
         error: 'Server Error'
+      });
+    }
+  }
+
+  // Login store user
+  async login(req: Request, res: Response): Promise<void> {
+    try {
+      const { email, password } = req.body;
+
+      // Validate request body
+      if (!email || !password) {
+        res.status(400).json({
+          success: false,
+          message: 'Please provide email and password'
+        });
+        return;
+      }
+
+      // Find store by email
+      const store = await Store.findOne({ email });
+      if (!store) {
+        res.status(401).json({
+          success: false,
+          message: 'Invalid credentials'
+        });
+        return;
+      }
+
+      // Check if store is active
+      if (!store.isActive) {
+        res.status(401).json({
+          success: false,
+          message: 'Store account is inactive'
+        });
+        return;
+      }
+
+      // Verify password
+      const isPasswordValid = await bcrypt.compare(password, store.password);
+      if (!isPasswordValid) {
+        res.status(401).json({
+          success: false,
+          message: 'Invalid credentials'
+        });
+        return;
+      }
+
+      // Find corresponding user
+      let user = await User.findOne({ email, userType: 'store' });
+      
+      // If no user exists, create one
+      if (!user) {
+        user = await User.create({
+          name: store.name,
+          email: store.email,
+          phone: store.phone,
+          userType: 'store',
+          storeId: store._id,
+          isPhoneVerified: true
+        });
+      }
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { 
+          id: user._id, 
+          type: 'store',
+          storeId: store._id 
+        },
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: '30d' }
+      );
+
+      // Return store data and token
+      res.json({
+        success: true,
+        data: {
+          _id: store._id,
+          name: store.name,
+          email: store.email,
+          phone: store.phone,
+          address: store.address,
+          isVerified: store.isVerified,
+          isActive: store.isActive,
+          storeType: store.storeType,
+          token
+        }
+      });
+    } catch (error) {
+      console.error('Store Login Error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error logging in'
       });
     }
   }
@@ -222,6 +320,16 @@ export class StoreController {
         return;
       }
 
+      // Update corresponding user record if it exists
+      await User.findOneAndUpdate(
+        { storeId: store._id },
+        { 
+          name: store.name,
+          email: store.email,
+          phone: store.phone
+        }
+      );
+
       res.status(200).json({
         success: true,
         data: store
@@ -254,6 +362,9 @@ export class StoreController {
         });
         return;
       }
+
+      // Also delete the corresponding user
+      await User.findOneAndDelete({ storeId: store._id });
 
       res.status(200).json({
         success: true,
