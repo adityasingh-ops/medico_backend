@@ -15,7 +15,11 @@ export const sendOTP = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'Phone number is required' });
         }
 
-        // Call 2Factor API to send OTP
+        // Generate a random 6-digit OTP for development
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        console.log(`Development OTP for ${phone}: ${otp}`);
+
+        /* Commented out 2Factor API call for development
         const response = await axios.get(
             `https://2factor.in/API/V1/${process.env.TWO_FACTOR_API_KEY}/SMS/${phone}/AUTOGEN`
         );
@@ -28,6 +32,15 @@ export const sendOTP = async (req: Request, res: Response) => {
         } else {
             throw new Error('Failed to send OTP');
         }
+        */
+
+        // Development response
+        res.json({
+            message: 'OTP sent successfully',
+            session_id: `DEV_${Date.now()}`,
+            // Remove this in production
+            otp: otp
+        });
     } catch (error) {
         console.error('Send OTP Error:', error);
         res.status(500).json({ message: 'Error sending OTP' });
@@ -44,12 +57,19 @@ export const verifyOTP = async (req: Request, res: Response) => {
             });
         }
 
-        // Verify OTP with 2Factor
+        /* Commented out 2Factor verification for development
         const response = await axios.get(
             `https://2factor.in/API/V1/${process.env.TWO_FACTOR_API_KEY}/SMS/VERIFY/${session_id}/${otp}`
         );
 
         if (response.data.Status === 'Success') {
+        */
+
+        // Development verification - log the verification attempt
+        console.log(`Verifying OTP for phone: ${phone}, OTP: ${otp}, Session: ${session_id}`);
+        
+        // For development, always consider OTP as valid
+        if (otp.length === 6) {  // Basic validation for development
             // Check if user exists
             let user = await User.findOne({ phone });
 
@@ -57,6 +77,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
                 // Create new user with only phone number
                 user = await User.create({
                     phone,
+                    email: `user${phone}@example.com`, // Added default email to prevent null email error
                     isPhoneVerified: true,
                     // Don't set location if coordinates aren't available
                 });
