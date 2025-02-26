@@ -1,6 +1,5 @@
-// src/server.ts
 import dotenv from 'dotenv';
-dotenv.config(); // This needs to be at the top
+dotenv.config();
 
 import express, { Express, Request, Response, NextFunction } from 'express';
 import { Server } from 'socket.io';
@@ -17,9 +16,18 @@ import medicineRoutes from './routes/medicineRoutes';
 import storeRoutes from './routes/storeRoutes';
 import cartRoutes from './routes/cartRoutes';
 import searchRoutes from './routes/searchRoutes';
+import chatRoutes from './routes/chatRoutes';
+import storeMessageRoutes from './routes/storeMessageRoutes';
 import orderRoutes from './routes/orderRoutes';
 
+// Import socket handlers
+import { initializeSocket } from './socket';
+
 const app: Express = express();
+const httpServer = createServer(app);
+
+// Initialize socket handlers with httpServer
+initializeSocket(httpServer);
 
 // Connect to database with error handling
 (async () => {
@@ -41,12 +49,15 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Routes
 app.use('/api/users', userRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/medicines', medicineRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/store/messages', storeMessageRoutes);
 app.use('/api/orders', orderRoutes);
 
 // Root route
@@ -59,9 +70,12 @@ app.use((req: Request, res: Response) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
+// Global error handler
+app.use(errorHandler);
+
 const PORT: number = parseInt(process.env.PORT || '5000', 10);
 
-const httpServer = createServer(app);
+// const httpServer = createServer(app);
 
 // httpServer.listen(PORT, () => {
 //   console.log(`Server running on port ${PORT}`);

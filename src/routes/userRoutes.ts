@@ -6,7 +6,7 @@ import {
   updateProfile,
   loginStore
 } from '../controllers/userController';
-// import { protect, userOnly } from '../middleware/auth';
+import { authenticateUser } from '../middleware/authMiddleware'; // Change the import path from middleware/authMiddleware to middleware/auth
 
 const router = express.Router();
 
@@ -15,9 +15,7 @@ router.post('/send-otp', sendOTP);
 router.post('/verify-otp', verifyOTP);
 router.post('/login-store', loginStore);
 
-// // Protected routes
-// router.use(protect);
-// router.use(userOnly);
-router.put('/profile', updateProfile);
+// Protected routes
+router.put('/profile', authenticateUser, updateProfile);
 
 export default router;
