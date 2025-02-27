@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import Store from '../models/Store';
+import { Store } from '../models/Store';
 
 export const validateStore = async (
   req: Request,

@@ -6,6 +6,8 @@ const router = express.Router();
 
 const controller = new OrderController();
 
+router.get('/store/:storeId',controller.getStoreOrders);
+router.get('/store/orderDetail/:id',controller.getOrderById);
 router.post('/',authenticateUser, controller.createOrder);
 router.get('/',authenticateUser, controller.getUserOrders);
 router.get('/order/:id',authenticateUser, controller.getOrderById);

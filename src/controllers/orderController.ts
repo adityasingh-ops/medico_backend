@@ -385,6 +385,38 @@ export class OrderController {
             });
         }
     }
+    async getStoreOrders(req: Request, res: Response): Promise<void> {
+        try {
+            console.log('Store ID:', req.params.storeId);
+            const storeId = req.params.storeId;
+            
+            // // Ensure the user has permission to access this store's orders
+            // if (req.user.role !== 'admin' && req.user._id.toString() !== storeId) {
+            //     res.status(403).json({
+            //         success: false,
+            //         error: 'Not authorized to access this store\'s orders'
+            //     });
+            //     return;
+            // }
+            console.log('Store ID:', storeId);
+            const orders = await Order.find({ storeId })
+                .sort({ createdAt: -1 })
+                .populate('userId', 'name phone email')
+                .exec();
+    
+            res.status(200).json({
+                success: true,
+                count: orders.length,
+                data: orders
+            });
+        } catch (error) {
+            console.error('Get store orders error:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Server Error'
+            });
+        }
+    }
 
     // Get single order details
     async getOrderById(req: Request, res: Response): Promise<void> {

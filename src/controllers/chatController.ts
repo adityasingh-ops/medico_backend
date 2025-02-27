@@ -207,7 +207,7 @@ export class ChatController {
         content: presetMessage.message,
         isPreset: true,
         metadata: {
-          product: presetMessage.products.length > 0 ? presetMessage.products[0]._id : undefined
+          product: presetMessage.products.length > 0 ? presetMessage.products[0] : undefined
         }
       });
 
