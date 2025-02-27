@@ -3,17 +3,15 @@ import express from 'express';
 import {
   sendOTP,
   verifyOTP,
-  updateProfile,
-  loginStore
+  updateProfile
 } from '../controllers/userController';
-import { authenticateUser } from '../middleware/authMiddleware'; // Change the import path from middleware/authMiddleware to middleware/auth
+import { authenticateUser } from '../middleware/authMiddleware';
 
 const router = express.Router();
 
 // Public routes
 router.post('/send-otp', sendOTP);
 router.post('/verify-otp', verifyOTP);
-router.post('/login-store', loginStore);
 
 // Protected routes
 router.put('/profile', authenticateUser, updateProfile);

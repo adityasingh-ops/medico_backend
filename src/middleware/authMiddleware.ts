@@ -2,6 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
+import { Store } from '../models/Store';
 
 // Extend Express Request type to include user
 declare global {
@@ -14,7 +15,9 @@ declare global {
 
 interface TokenPayload {
     id: string;
-    role: string;
+    role?: string;
+    type?: string;
+    storeId?: string;
 }
 
 // Authentication middleware
@@ -37,31 +40,47 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
         ) as TokenPayload;
 
         // Find user
-        const user = await User.findById(decoded.id).select('-__v');
+        let user = await User.findById(decoded.id).select('-__v');
+        
+        // If user not found but it's a store token, try to find the store
+        if (!user && (decoded.type === 'store' || decoded.storeId)) {
+            const storeId = decoded.storeId || decoded.id;
+            const store = await Store.findById(storeId);
+            
+            if (store) {
+                // Create a plain object instead of trying to create a Document instance
+                // This is fine since we just need req.user to have the necessary properties
+                // TypeScript is complaining because we're trying to assign a plain object to a Mongoose Document type
+                const storeObj = store.toObject ? store.toObject() : JSON.parse(JSON.stringify(store));
+                req.user = {
+                    _id: storeObj._id,
+                    name: storeObj.name,
+                    email: storeObj.email,
+                    phone: storeObj.phone,
+                    userType: 'store',
+                    storeId: storeObj._id
+                };
+                next();
+                return;
+            }
+        }
         
         if (!user) {
             return res.status(401).json({ message: 'User not found' });
         }
 
-        // if (!user.isActive) {
-        //     return res.status(401).json({ message: 'User account is deactivated' });
-        // }
-
-        // // Update last login
-        // user.lastLogin = new Date();
-        // await user.save();
-
         // Attach user to request
         req.user = user;
         next();
     } catch (error) {
+        console.error('Auth error:', error);
         if (error instanceof jwt.JsonWebTokenError) {
             return res.status(401).json({ message: 'Invalid token' });
         }
         if (error instanceof jwt.TokenExpiredError) {
             return res.status(401).json({ message: 'Token expired' });
         }
-        return res.status(500).json({ message: 'Authentication error' });
+        return res.status(401).json({ message: 'Authentication error' });
     }
 };
 

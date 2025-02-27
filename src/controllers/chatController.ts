@@ -5,6 +5,7 @@ import { PresetMessage } from '../models/PresetMessage';
 import { Store } from '../models/Store';
 import { getSocketIO } from '../socket';
 import { chatService } from '../services/chatService';
+import { Types } from 'mongoose';
 
 export class ChatController {
   // Get nearby stores for chat
@@ -207,7 +208,13 @@ export class ChatController {
         content: presetMessage.message,
         isPreset: true,
         metadata: {
-          product: presetMessage.products.length > 0 ? presetMessage.products[0] : undefined
+          
+          product: presetMessage.products && presetMessage.products.length > 0 
+            ? (typeof presetMessage.products[0] === 'string' 
+                ? presetMessage.products[0] 
+                : presetMessage.products[0].toString())
+            : undefined
+
         }
       });
 
@@ -283,7 +290,7 @@ export class ChatController {
         
         console.log(`Using store ID: ${storeId} for query`);
         const chatRooms = await chatService.getActiveChatRooms(storeId.toString(), userType);
-  
+
         res.status(200).json({
           success: true,
           data: chatRooms
@@ -304,5 +311,5 @@ export class ChatController {
         error: 'Error fetching active chat rooms'
       });
     }
-  }  
+  }
 }

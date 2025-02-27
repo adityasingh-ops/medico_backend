@@ -1,4 +1,4 @@
-// src/models/userModel.ts
+// src/models/User.ts
 import { Schema, model, Document, Model } from "mongoose";
 
 // Interface for User Document
@@ -65,7 +65,8 @@ const userSchema = new Schema<IUser>({
 
 // Index for geospatial queries
 userSchema.index({ location: '2dsphere' });
-
+// Index for quick lookup by storeId
+userSchema.index({ storeId: 1 });
 
 const User: Model<IUser> = model<IUser>('User', userSchema);
 export default User;
