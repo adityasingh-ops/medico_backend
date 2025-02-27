@@ -208,11 +208,13 @@ export class ChatController {
         content: presetMessage.message,
         isPreset: true,
         metadata: {
+          
           product: presetMessage.products && presetMessage.products.length > 0 
             ? (typeof presetMessage.products[0] === 'string' 
                 ? presetMessage.products[0] 
                 : presetMessage.products[0].toString())
             : undefined
+
         }
       });
 
