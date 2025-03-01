@@ -14,10 +14,8 @@ export class OrderController {
         try {
             const userId = req.user._id;
             const { longitude, latitude, deliveryAddress, paymentMethod = 'COD' } = req.body;
+
             const maxDistance = req.body.maxDistance || 5000; // Default 5km
-            console.log('Request body:', req.body);
-            console.log('Auth user:', userId);
-            console.log('Cart before order:', await Cart.findOne({ userId: req.user?.id || req.body.userId }));
 
             // 1. Get the user's cart
             const cart = await Cart.findOne({ userId }).session(session);
@@ -97,6 +95,7 @@ export class OrderController {
                         requiresPrescription: true
                     }).session(session);
 
+
                     // Create order
                     const order = await Order.create(
                         [{
@@ -118,7 +117,7 @@ export class OrderController {
                                     notes: 'Order placed successfully'
                                 }
                             ],
-                            estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
+                            estimatedDeliveryTime: new Date(Date.now() + 20 * 60 * 1000),
                             prescriptionRequired: !!prescriptionRequired,
                             isPrescriptionVerified: false
                         }],
@@ -462,7 +461,7 @@ export class OrderController {
                 });
                 return;
             }
-
+            console.log('Order ID:', req.params.id);
             const order = await Order.findById(req.params.id);
 
             if (!order) {
@@ -472,19 +471,6 @@ export class OrderController {
                 });
                 return;
             }
-
-            // Check if the user is authorized to update this order
-            if (
-                req.user?.id !== order.storeId.toString() &&
-                req.user?.role !== 'admin'
-            ) {
-                res.status(403).json({
-                    success: false,
-                    error: 'Not authorized to update this order'
-                });
-                return;
-            }
-
             // Add to status history
             const statusUpdate = {
                 status,
