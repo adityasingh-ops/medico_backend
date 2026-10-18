@@ -1,0 +1,11 @@
+Medzo API {{ include "medzo.imageTag" . }} deployed to namespace {{ .Release.Namespace }}.
+
+Check it:
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+  curl http://localhost/version
+  curl http://localhost/readyz
+{{- if .Values.rollout.enabled }}
+
+Watch a release:
+  kubectl argo rollouts get rollout {{ include "medzo.fullname" . }} -n {{ .Release.Namespace }} --watch
+{{- end }}

@@ -1,0 +1,23 @@
+# Local / CI: images built on this machine, one replica, no canary pauses.
+replicaCount: 1
+
+image:
+  repository: medzo-api
+  pullPolicy: Never   # image is loaded into kind with `kind load docker-image`
+  tag: dev
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+
+config:
+  NODE_ENV: development
+  LOG_LEVEL: debug
+
+tracing:
+  samplerArg: "1.0"
+
+rollout:
+  enabled: false
