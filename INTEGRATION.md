@@ -28,7 +28,7 @@ The consumer browses two ways:
    - `POST /api/medicines/:id/toggle` — toggle a medicine's availability.
 3. **Operating hours / rating / verified badge** are read from the `Store` document.
 
-### ⚠️ Required data change: per-store stock & price
+### Warning: required data change: per-store stock & price
 Today `Medicine.stock` and `Medicine.price` are **global** (one value across all stores), and a
 medicine simply has a `stores: ObjectId[]` membership list. For real multi-store inventory the
 store app needs **per-store stock and price**. Recommended model — a join collection:

@@ -109,9 +109,9 @@ const PRESETS = [
   const sellable = await stores.find({ isVerified: true, isActive: true }).toArray();
   for (const s of sellable) {
     const n = await medicines.countDocuments({ stores: s._id });
-    console.log(` ✓ ${s.name} — ${n} medicines @ [${s.location?.coordinates}]`);
+    console.log(` OK ${s.name} — ${n} medicines @ [${s.location?.coordinates}]`);
   }
-  if (sellable.length === 0) console.log(' ✗ No verified+active store — checkout WILL fail.');
+  if (sellable.length === 0) console.log(' FAIL No verified+active store — checkout WILL fail.');
   console.log(` catalogue: ${await medicines.countDocuments({ isAvailable: true, stock: { $gte: 1 } })} medicines in stock`);
   console.log(` preset messages: ${await presets.countDocuments()}`);
 
