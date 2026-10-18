@@ -6,8 +6,10 @@ const express = require("express");
 export class searchController {
      async search(req: Request, res: Response) {
         try {
-            const { query } = req.query; // Get search query from request
-    
+            // Accept the common aliases so the endpoint isn't sensitive to which
+            // param name the caller uses.
+            const query = req.query.query || req.query.q || req.query.search;
+
             if (!query) {
                 return res.status(400).json({ message: "Search query is required" });
             }

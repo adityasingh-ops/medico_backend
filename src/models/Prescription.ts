@@ -1,4 +1,4 @@
-import { Schema } from "mongoose";
+import { Schema, model } from "mongoose";
 
 const prescriptionSchema = new Schema({
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -13,4 +13,6 @@ const prescriptionSchema = new Schema({
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
   });
-  
+
+export const Prescription = model('Prescription', prescriptionSchema);
+export default Prescription;

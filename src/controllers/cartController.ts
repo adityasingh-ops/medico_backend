@@ -113,8 +113,9 @@ export class CartController {
             const userId = req.user._id;
 
             const cart = await Cart.findOne({ userId });
+            // Nothing to clear is the desired end state, so report success.
             if (!cart) {
-                return res.status(404).json({ message: 'Cart not found' });
+                return res.status(200).json({ userId, items: [], totalAmount: 0 });
             }
 
             cart.items = [];
@@ -134,8 +135,11 @@ export class CartController {
                 .populate('items.medicineId')
                 .populate('items.storeId');
 
+            // A user who has never added anything has no Cart document. That is an
+            // empty cart, not an error — 404 here made the client show a failure
+            // state on a brand-new account.
             if (!cart) {
-                return res.status(404).json({ message: 'Cart not found' });
+                return res.status(200).json({ userId, items: [], totalAmount: 0 });
             }
 
             return res.status(200).json(cart);

@@ -4,7 +4,9 @@ import { IStore, StoreType } from '../types/store';
 const storeSchema = new Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  // select:false → password never ships in query results or through populate().
+  // Login paths must opt in explicitly with .select('+password').
+  password: { type: String, required: true, select: false },
   phone: { type: String, required: true },
   address: {
     street: { type: String, required: true },
