@@ -1,0 +1,7 @@
+# Sun Oct 18 20:46:22 IST 2026
+$ kubectl get nodes -o wide
+NAME                  STATUS   ROLES           AGE   VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                       KERNEL-VERSION             CONTAINER-RUNTIME
+medzo-control-plane   Ready    control-plane   19m   v1.37.0   172.18.0.3    <none>        Debian GNU/Linux 13 (trixie)   6.12.76-linuxkit (arm64)   containerd://2.3.4
+medzo-worker          Ready    <none>          19m   v1.37.0   172.18.0.4    <none>        Debian GNU/Linux 13 (trixie)   6.12.76-linuxkit (arm64)   containerd://2.3.4
+medzo-worker2         Ready    <none>          19m   v1.37.0   172.18.0.2    <none>        Debian GNU/Linux 13 (trixie)   6.12.76-linuxkit (arm64)   containerd://2.3.4
+

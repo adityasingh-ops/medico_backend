@@ -1,0 +1,16 @@
+# Sun Oct 18 20:46:22 IST 2026
+$ helm test medzo -n medzo-dev --logs
+NAME: medzo
+LAST DEPLOYED: Sun Oct 18 20:46:16 2026
+NAMESPACE: medzo-dev
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+TEST SUITE:     medzo-test-connection
+Last Started:   Sun Oct 18 20:46:22 2026
+Last Completed: Sun Oct 18 20:46:26 2026
+Phase:          Succeeded
+
+POD LOGS: medzo-test-connection (wget)
+{"status":"ready"}{"version":"50e0559","commit":"50e0559"}
+

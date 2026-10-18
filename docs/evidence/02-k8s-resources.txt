@@ -1,0 +1,48 @@
+# Sun Oct 18 20:46:22 IST 2026
+$ helm list -n medzo-dev
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+medzo	medzo-dev	2       	2026-10-18 20:46:16.219827 +0530 IST	deployed	medzo-0.1.0	1.0.0      
+
+$ kubectl get pods -n medzo-dev -o wide
+NAME                           READY   STATUS    RESTARTS   AGE     IP           NODE            NOMINATED NODE   READINESS GATES
+medzo-7cf9677f8f-bdk8r         1/1     Running   0          3m19s   10.244.2.7   medzo-worker    <none>           <none>
+medzo-7cf9677f8f-wmww9         1/1     Running   0          2m47s   10.244.1.7   medzo-worker2   <none>           <none>
+medzo-mongodb-0                1/1     Running   0          3m14s   10.244.1.6   medzo-worker2   <none>           <none>
+medzo-redis-58974c7b59-c84n6   1/1     Running   0          6m52s   10.244.2.3   medzo-worker    <none>           <none>
+medzo-test-connection          0/1     Error     0          6m41s   10.244.2.5   medzo-worker    <none>           <none>
+
+$ kubectl get deploy,statefulset,svc,ingress,pvc,hpa,pdb,networkpolicy,configmap -n medzo-dev
+NAME                          READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/medzo         2/2     2            2           6m52s
+deployment.apps/medzo-redis   1/1     1            1           6m52s
+
+NAME                             READY   AGE
+statefulset.apps/medzo-mongodb   1/1     6m52s
+
+NAME                    TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)     AGE
+service/medzo           ClusterIP   10.96.249.82    <none>        5858/TCP    6m52s
+service/medzo-mongodb   ClusterIP   None            <none>        27017/TCP   6m52s
+service/medzo-redis     ClusterIP   10.96.202.247   <none>        6379/TCP    6m52s
+
+NAME                              CLASS   HOSTS   ADDRESS        PORTS   AGE
+ingress.networking.k8s.io/medzo   nginx   *       10.96.73.232   80      6s
+
+NAME                                         STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+persistentvolumeclaim/data-medzo-mongodb-0   Bound    pvc-4cd0e075-7ae7-444e-b8b4-b37f1ab49a1e   1Gi        RWO            standard       <unset>                 6m52s
+
+NAME                                        REFERENCE          TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/medzo   Deployment/medzo   cpu: 9%/70%   2         6         2          6m52s
+
+NAME                               MIN AVAILABLE   MAX UNAVAILABLE   ALLOWED DISRUPTIONS   AGE
+poddisruptionbudget.policy/medzo   1               N/A               1                     6m52s
+
+NAME                                            POD-SELECTOR                                                                                        AGE
+networkpolicy.networking.k8s.io/medzo-api       app.kubernetes.io/component=api,app.kubernetes.io/instance=medzo,app.kubernetes.io/name=medzo       6m52s
+networkpolicy.networking.k8s.io/medzo-mongodb   app.kubernetes.io/component=mongodb,app.kubernetes.io/instance=medzo,app.kubernetes.io/name=medzo   6m52s
+networkpolicy.networking.k8s.io/medzo-redis     app.kubernetes.io/component=redis,app.kubernetes.io/instance=medzo,app.kubernetes.io/name=medzo     6m52s
+
+NAME                         DATA   AGE
+configmap/kube-root-ca.crt   1      6m52s
+configmap/medzo-config       6      6m52s
+configmap/medzo-dashboard    1      6m52s
+
