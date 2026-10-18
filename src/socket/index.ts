@@ -3,6 +3,7 @@ import { Server as HTTPServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { chatService } from '../services/chatService';
 import { ChatRoom } from '../models/chatRoom';
+import { socketConnections } from '../observability/metrics';
 
 interface CustomSocket extends Socket {
   data: {
@@ -43,6 +44,7 @@ export const initializeSocket = (httpServer: HTTPServer) => {
   // Handle connection
   io.on('connection', (socket: CustomSocket) => {
     console.log(`User connected: ${socket.data.userId}`);
+    socketConnections.inc();
 
     // If user is a store, join a store-specific room
     if (socket.data.userType === 'store') {
@@ -206,6 +208,7 @@ export const initializeSocket = (httpServer: HTTPServer) => {
     // Handle disconnect
     socket.on('disconnect', () => {
       console.log(`User disconnected: ${socket.data.userId}`);
+      socketConnections.dec();
     });
   });
 };
