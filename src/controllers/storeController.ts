@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { Store } from '../models/Store';
+import { SERVICE_RADIUS_M } from '../config/serviceArea';
 import User from '../models/User';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -158,7 +159,8 @@ export class StoreController {
       }
 
       // Find store by email
-      const store = await Store.findOne({ email });
+      // password is select:false on the schema — opt in for the credential check.
+    const store = await Store.findOne({ email }).select('+password');
       if (!store) {
         res.status(401).json({
           success: false,
@@ -254,22 +256,32 @@ export class StoreController {
 
   async getNearbyStores(req: Request, res: Response): Promise<void> {
     try {
-      const { longitude, latitude, maxDistance = 5000 } = req.query; // maxDistance in meters
+      const { longitude, latitude, maxDistance = SERVICE_RADIUS_M } = req.query; // meters
+
+      if (!longitude || !latitude) {
+        res.status(400).json({ success: false, error: 'longitude and latitude are required' });
+        return;
+      }
+
+      // Same fixed service radius as the catalogue and order routing.
+      const radius = Number(maxDistance) || SERVICE_RADIUS_M;
 
       const stores = await Store.find({
-        location: { 
+        location: {
           $near: {
             $geometry: {
               type: 'Point',
               coordinates: [Number(longitude), Number(latitude)]
             },
-            $maxDistance: Number(maxDistance)
+            $maxDistance: radius
           }
-        }
+        },
+        isActive: true
       });
 
       res.status(200).json({
         success: true,
+        serviceRadiusKm: Math.round(radius / 1000),
         data: stores
       });
     } catch (error) {

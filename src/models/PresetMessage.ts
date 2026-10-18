@@ -27,7 +27,7 @@ export interface IPresetMessage extends Document {
     },
     products: [{
       type: Schema.Types.ObjectId,
-      ref: 'Product'
+      ref: 'Medicine'
     }],
     isActive: {
       type: Boolean,

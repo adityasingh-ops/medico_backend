@@ -19,6 +19,8 @@ import searchRoutes from './routes/searchRoutes';
 import chatRoutes from './routes/chatRoutes';
 import storeMessageRoutes from './routes/storeMessageRoutes';
 import orderRoutes from './routes/orderRoutes';
+import prescriptionRoutes from './routes/prescriptionRoutes';
+import verificationRoutes from './routes/verificationRoutes';
 
 // Import socket handlers
 import { initializeSocket } from './socket';
@@ -46,8 +48,8 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '15mb' })); // base64 prescription images can be large
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Routes
 app.use('/api/users', userRoutes);
@@ -59,6 +61,8 @@ app.use('/api/search', searchRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/store/messages', storeMessageRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/prescriptions', prescriptionRoutes);
+app.use('/api/verifications', verificationRoutes);
 
 // Root route
 app.get('/', (req: Request, res: Response) => {
@@ -81,8 +85,11 @@ const PORT: number = parseInt(process.env.PORT || '5000', 10);
 //   console.log(`Server running on port ${PORT}`);
 // });
 
-httpServer.listen(PORT, '0.0.0.0', () => {             ///my flat
-  console.log(`Server running on http://192.168.1.7:${PORT}`);
+httpServer.listen(PORT, '0.0.0.0', () => {
+  // Bound to 0.0.0.0 → reachable on every interface.
+  console.log(`Server listening on 0.0.0.0:${PORT}`);
+  console.log(`  • Web / same machine: http://localhost:${PORT}`);
+  console.log(`  • Phone on same Wi-Fi: http://<your-LAN-IP>:${PORT}  (e.g. ipconfig getifaddr en0)`);
 });
 // httpServer.listen(PORT, '0.0.0.0', () => {          //stanza   
 //   console.log(`Server running on http://10.51.2.200:${PORT}`);

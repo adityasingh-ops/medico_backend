@@ -53,7 +53,7 @@ const messageSchema = new Schema({
   metadata: {
     product: {
       type: Schema.Types.ObjectId,
-      ref: 'Product'
+      ref: 'Medicine'
     },
     dosage: String,
     quantity: Number,
