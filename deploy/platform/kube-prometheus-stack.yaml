@@ -38,3 +38,8 @@ kubeEtcd: { enabled: false }
 kubeControllerManager: { enabled: false }
 kubeScheduler: { enabled: false }
 kubeProxy: { enabled: false }
+
+# Docker Desktop / kind: the host root mount fails ("not a shared or slave mount")
+prometheus-node-exporter:
+  hostRootFsMount:
+    enabled: false

@@ -10,6 +10,10 @@ OUT=docs/evidence
 mkdir -p $OUT
 run() { echo "\$ $*"; "$@" 2>&1; echo; }
 
+for t in kind helm kubectl docker curl; do
+  command -v $t >/dev/null || { echo "Missing tool: $t (brew install $t)"; exit 1; }
+done
+
 echo "==> Cluster, ingress, metrics-server"
 kind get clusters | grep -qx medzo || kind create cluster --config deploy/kind/cluster.yaml
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx >/dev/null
@@ -17,9 +21,9 @@ helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/ >
 helm repo update >/dev/null
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx --version 4.15.1 \
   -n ingress-nginx --create-namespace -f deploy/platform/ingress-nginx.yaml \
-  --set controller.metrics.serviceMonitor.enabled=false --wait
+  --set controller.metrics.serviceMonitor.enabled=false --wait --timeout 10m || exit 1
 helm upgrade --install metrics-server metrics-server/metrics-server --version 3.14.0 \
-  -n kube-system -f deploy/platform/metrics-server.yaml --wait
+  -n kube-system -f deploy/platform/metrics-server.yaml --wait --timeout 10m || exit 1
 
 echo "==> Build image and deploy (2 replicas, HPA, PDB on)"
 SHA=$(git rev-parse --short HEAD)
@@ -29,8 +33,10 @@ helm upgrade --install medzo helm/medzo -n $NS --create-namespace \
   -f helm/medzo/values-dev.yaml --set image.tag=$SHA \
   --set autoscaling.enabled=true --set autoscaling.minReplicas=2 \
   --set podDisruptionBudget.enabled=true --set tracing.enabled=false \
-  --wait --timeout 5m
-sleep 10
+  --wait --timeout 10m || { echo "helm install of medzo failed"; exit 1; }
+kubectl wait pod -n $NS -l 'app.kubernetes.io/instance=medzo,app.kubernetes.io/component' \
+  --for=condition=ready --timeout=300s || exit 1
+sleep 5
 
 { echo "# $(date)"; run kubectl get nodes -o wide; } > $OUT/01-nodes.txt
 

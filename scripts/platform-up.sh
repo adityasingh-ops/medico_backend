@@ -13,17 +13,19 @@ helm repo add grafana https://grafana.github.io/helm-charts
 helm repo add argo https://argoproj.github.io/argo-helm
 helm repo update
 
+# First: it installs the ServiceMonitor/PrometheusRule CRDs the other charts use
+echo "==> Prometheus, Alertmanager, Grafana"
+helm upgrade --install monitoring prometheus-community/kube-prometheus-stack --version 92.10.1 \
+  -n monitoring --create-namespace -f $P/kube-prometheus-stack.yaml
+
 echo "==> ingress-nginx"
+# --timeout: image pulls can be slow on a home connection
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx --version 4.15.1 \
-  -n ingress-nginx --create-namespace -f $P/ingress-nginx.yaml
+  -n ingress-nginx --create-namespace -f $P/ingress-nginx.yaml --wait --timeout 10m
 
 echo "==> metrics-server (for the HPA)"
 helm upgrade --install metrics-server metrics-server/metrics-server --version 3.14.0 \
   -n kube-system -f $P/metrics-server.yaml
-
-echo "==> Prometheus, Alertmanager, Grafana"
-helm upgrade --install monitoring prometheus-community/kube-prometheus-stack --version 92.10.1 \
-  -n monitoring --create-namespace -f $P/kube-prometheus-stack.yaml
 
 echo "==> Loki, Alloy, Jaeger (logs and traces)"
 kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -

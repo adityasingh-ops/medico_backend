@@ -1,0 +1,22 @@
+# Sun Oct 18 20:48:00 IST 2026  Container and network security
+$ kubectl exec -n medzo-dev deploy/medzo -- id
+uid=1000(node) gid=1000(node) groups=1000(node)
+
+$ kubectl exec -n medzo-dev deploy/medzo -- touch /app/write-test
+touch: /app/write-test: Read-only file system
+command terminated with exit code 1
+
+$ kubectl get pod -n medzo-dev -l app.kubernetes.io/component=api -o jsonpath={.items[0].spec.containers[0].securityContext}{"\n"}
+{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}
+
+# api pod -> MongoDB (allowed by NetworkPolicy)
+$ kubectl exec -n medzo-dev deploy/medzo -- node -e const s=require('net').connect(27017,'medzo-mongodb');s.on('connect',()=>{console.log('connected');process.exit(0)});s.setTimeout(5000,()=>{console.log('timed out');process.exit(1)})
+connected
+
+# unrelated pod -> MongoDB (should be blocked by NetworkPolicy)
+$ kubectl run np-test -n medzo-dev --rm -i --restart=Never --image=busybox:1.36 -- sh -c nc -z -w 5 medzo-mongodb 27017 && echo connected || echo "blocked (timed out)"
+All commands and output from this session will be recorded in container logs, including credentials and sensitive information passed through the command prompt.
+If you don't see a command prompt, try pressing enter.
+blocked (timed out)
+pod "np-test" deleted from medzo-dev namespace
+
