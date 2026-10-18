@@ -38,7 +38,7 @@ Text outputs are in [docs/evidence/](evidence/), screenshots in [docs/evidence/s
 
 | # | What | Evidence |
 |---|---|---|
-| 17 | Grafana dashboard with traffic | not captured: Grafana timed out once the full stack overloaded the laptop (see README, Known limitations) |
+| 17 | Grafana "Medzo API" dashboard (last 1 hour): steady traffic from 21:07 (`/api/categories` 200, about 2.5 req/s), then from about 21:17 the 5xx ratio rises to 100% and p95/p99 hit the 10 s bucket while the laptop cluster was overloaded (MongoDB unreachable). The dashboard caught a real incident; error ratio and requests are split by version `50e0559` | [screenshot](evidence/screenshots/05-grafana-dashboard.png) |
 | 18 | Prometheus scrapes the api through the ServiceMonitor; each series carries `app_kubernetes_io_version="50e0559"` (UP pods; the DOWN ones were restarting while the laptop cluster was overloaded) | [screenshot](evidence/screenshots/04-prometheus-targets.png) |
 | 19 | Alert firing during MongoDB drill | not captured (same reason); rules are in `helm/medzo/templates/monitoring.yaml` |
 | 20 | Logs for one request in Loki | not captured (same reason) |
