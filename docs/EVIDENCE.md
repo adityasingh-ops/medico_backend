@@ -1,24 +1,55 @@
 # Evidence
 
-Fill this in from your own runs. Every item should point at something real: a link, a command
-output or a screenshot taken from this project.
+Every item points at a real run, command output or screenshot from this project.
+Text outputs are in [docs/evidence/](evidence/), screenshots in [docs/evidence/screenshots/](evidence/screenshots/).
 
-| # | What | How to get it | Link / file |
-|---|---|---|---|
-| 1 | Original version kept | tag `v0-original` on the commit before the DevOps work | |
-| 2 | CI run for a PR (all jobs green) | Actions tab → the PR run | |
-| 3 | CI run on main with publish + approved promote | Actions tab | |
-| 4 | Image in GHCR tagged with the commit SHA | Packages → medzo-api | |
-| 5 | Deploy commit written by CI | `git log -- helm/medzo/values-prod.yaml` | |
-| 6 | Argo CD app Synced/Healthy at that commit | Argo CD UI screenshot | |
-| 7 | Running version = commit | `curl localhost/version` output | |
-| 8 | Successful request through the Ingress | `curl localhost/api/categories` output | |
-| 9 | Canary in progress (25%) and finished | `kubectl argo rollouts get rollout medzo -n medzo-prod` | |
-| 10 | Bad release aborted by analysis | AnalysisRun Failed + rollout Degraded/aborted output | |
-| 11 | Rollback with git revert | revert commit + `/version` after | |
-| 12 | Grafana dashboard with traffic | screenshot | |
-| 13 | Alert firing during MongoDB drill | Prometheus /alerts or Alertmanager screenshot | |
-| 14 | Logs in Loki for one request | Grafana Explore screenshot | |
-| 15 | Trace in Jaeger (Express → MongoDB span) | screenshot | |
-| 16 | HPA scaling under load | `kubectl get hpa -n medzo-prod -w` output | |
-| 17 | Drift corrected by Argo CD | before/after `kubectl get` output | |
+## CI/CD
+
+| # | What | Evidence |
+|---|---|---|
+| 1 | Original version kept | baseline commit [`23f045d`](https://github.com/adityasingh-ops/medico_backend/commit/23f045ded719a36e0a1333a05495ce0a8f5406ac) on `main`; all work is in PR #3 |
+| 2 | PR pipeline green: typecheck, tests, chart lint, kubeconform, build, Trivy, deploy on kind, helm test, smoke test | [run 39134599741](https://github.com/adityasingh-ops/medico_backend/actions/runs/39134599741), output in [ci-deploy-test.txt](evidence/ci-deploy-test.txt) |
+| 3 | Pipeline blocks a vulnerable image | [run 39130852093](https://github.com/adityasingh-ops/medico_backend/actions/runs/39130852093) (build failed on 26 CVEs), fix and re-scan in [trivy-gate.txt](evidence/trivy-gate.txt) |
+| 4 | Image in GHCR tagged with the commit SHA | after merge: `publish` job + Packages → medzo-api |
+| 5 | Approved promote writes the release to git | after merge: `promote` job + `git log -- helm/medzo/values-prod.yaml` |
+
+## Working application and Kubernetes (local kind cluster)
+
+| # | What | Evidence |
+|---|---|---|
+| 6 | 3-node cluster | [01-nodes.txt](evidence/01-nodes.txt) |
+| 7 | All resources: pods spread over workers, Services, Ingress, PVC, NetworkPolicies, PDB | [02-k8s-resources.txt](evidence/02-k8s-resources.txt) |
+| 8 | helm test from inside the cluster | [03-helm-test.txt](evidence/03-helm-test.txt) |
+| 9 | Requests through the Ingress on localhost | [04-app-requests.txt](evidence/04-app-requests.txt) |
+| 10 | Probes and rolling update (zero downtime) | [05-rollout.txt](evidence/05-rollout.txt) |
+| 11 | Self-healing: deleted pod replaced, MongoDB data kept on its volume | [06-self-healing.txt](evidence/06-self-healing.txt) |
+
+## Release control (prod via Argo CD)
+
+| # | What | Evidence |
+|---|---|---|
+| 12 | Argo CD app Synced/Healthy at the release commit | screenshot |
+| 13 | Canary at 25% and finished | `kubectl argo rollouts get rollout medzo -n medzo-prod` output |
+| 14 | Bad release aborted by the analysis | AnalysisRun Failed + rollout aborted output |
+| 15 | Rollback with `git revert` | revert commit + `/version` after |
+| 16 | Drift corrected by Argo CD | before/after output |
+
+## Observability
+
+| # | What | Evidence |
+|---|---|---|
+| 17 | Grafana dashboard with traffic | screenshot |
+| 18 | Prometheus target UP | screenshot |
+| 19 | Alert firing during MongoDB drill | screenshot |
+| 20 | Logs for one request in Loki | screenshot |
+| 21 | Trace in Jaeger (Express → MongoDB span) | screenshot |
+| 22 | HPA scaling under load | `kubectl get hpa -w` output |
+
+## Security
+
+| # | What | Evidence |
+|---|---|---|
+| 23 | Image scan gate | rows 2-3 |
+| 24 | Non-root, read-only root file system | [07-security.txt](evidence/07-security.txt) |
+| 25 | NetworkPolicy blocks other pods from MongoDB | [07-security.txt](evidence/07-security.txt) |
+| 26 | No secrets in git (GitGuardian on every PR) | PR #3 checks |

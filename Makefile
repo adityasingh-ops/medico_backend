@@ -50,6 +50,10 @@ smoke: ## Call the app through the Ingress
 	curl -sf http://localhost/healthz && echo
 	curl -sf http://localhost/version && echo
 
+.PHONY: evidence
+evidence: ## Collect section 2 evidence into docs/evidence (kind + ingress only)
+	./scripts/evidence-k8s.sh
+
 .PHONY: down
 down: ## Delete the cluster
 	kind delete cluster --name $(CLUSTER)

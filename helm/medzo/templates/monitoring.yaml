@@ -1,5 +1,6 @@
 {{- $api := dict "root" . "component" "api" -}}
-{{- if .Values.monitoring.serviceMonitor.enabled }}
+{{- $promCRDs := .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
+{{- if and .Values.monitoring.serviceMonitor.enabled $promCRDs }}
 # Prometheus scrapes /metrics on every api pod every 15s
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -21,7 +22,7 @@ spec:
       path: /metrics
       interval: 15s
 {{- end }}
-{{- if .Values.monitoring.prometheusRule.enabled }}
+{{- if and .Values.monitoring.prometheusRule.enabled $promCRDs }}
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule

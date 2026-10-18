@@ -48,7 +48,9 @@ jobs:
         run: |
           curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz
           for v in values-dev.yaml values-prod.yaml; do
-            helm template medzo helm/medzo -f helm/medzo/$v | ./kubeconform -strict -summary \
+            # --api-versions: pretend the Prometheus CRDs exist so ServiceMonitor/PrometheusRule are validated too
+            helm template medzo helm/medzo -f helm/medzo/$v --api-versions monitoring.coreos.com/v1 \
+              | ./kubeconform -strict -summary \
               -kubernetes-version 1.31.0 -schema-location default \
               -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
           done
