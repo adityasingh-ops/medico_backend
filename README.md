@@ -2,7 +2,7 @@
 
 Medzo is a medicine delivery backend (Express + socket.io + MongoDB, TypeScript). This branch adds
 everything needed to build, deploy, release, observe and operate it on Kubernetes.
-The app before this work is kept as tag `v0-original`.
+The app before this work is the baseline commit `23f045d` on `main`.
 
 - How it works: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Why each choice: [docs/DECISIONS.md](docs/DECISIONS.md)
@@ -13,7 +13,7 @@ The app before this work is kept as tag `v0-original`.
 
 | Area | Before | After |
 |---|---|---|
-| Build | `postinstall: tsc`, `tsConfig.json` (breaks on Linux: case-sensitive) | multi-stage Dockerfile, non-root, `tsconfig.json` |
+| Build | `postinstall: tsc` (built on every `npm install`), `tsConfig.json` (breaks on Linux: case-sensitive) | multi-stage Dockerfile, non-root, `tsconfig.json` |
 | Shutdown | only SIGINT, so Kubernetes' SIGTERM killed requests | SIGTERM + SIGINT, drains HTTP, sockets, Redis, MongoDB |
 | Health | none | `/healthz`, `/readyz` (checks MongoDB), `/version` |
 | Chat across pods | in-memory rooms (breaks with 2+ pods) | Redis adapter + sticky ingress cookie |
