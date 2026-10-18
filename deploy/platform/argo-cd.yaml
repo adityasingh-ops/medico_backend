@@ -1,0 +1,12 @@
+# Minimal Argo CD for one laptop: no HA, no Dex (SSO), no notifications.
+dex:
+  enabled: false
+notifications:
+  enabled: false
+configs:
+  params:
+    # UI over plain HTTP via port-forward
+    server.insecure: true
+  cm:
+    # Poll git every 60s (default 180s) so a promote shows up quickly
+    timeout.reconciliation: 60s
