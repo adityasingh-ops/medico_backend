@@ -38,11 +38,11 @@ Text outputs are in [docs/evidence/](evidence/), screenshots in [docs/evidence/s
 
 | # | What | Evidence |
 |---|---|---|
-| 17 | Grafana dashboard with traffic | screenshot |
-| 18 | Prometheus target UP | screenshot |
-| 19 | Alert firing during MongoDB drill | screenshot |
-| 20 | Logs for one request in Loki | screenshot |
-| 21 | Trace in Jaeger (Express → MongoDB span) | screenshot |
+| 17 | Grafana dashboard with traffic | not captured: Grafana timed out once the full stack overloaded the laptop (see README, Known limitations) |
+| 18 | Prometheus scrapes the api through the ServiceMonitor; each series carries `app_kubernetes_io_version="50e0559"` (UP pods; the DOWN ones were restarting while the laptop cluster was overloaded) | [screenshot](evidence/screenshots/04-prometheus-targets.png) |
+| 19 | Alert firing during MongoDB drill | not captured (same reason); rules are in `helm/medzo/templates/monitoring.yaml` |
+| 20 | Logs for one request in Loki | not captured (same reason) |
+| 21 | Traces in Jaeger from OpenTelemetry auto-instrumentation: trace list (failing `/readyz` calls marked as errors) and one `GET /healthz` trace with 5 spans (middleware, router, handler) | [list](evidence/screenshots/02-jaeger-traces-list.png), [trace](evidence/screenshots/03-jaeger-trace-detail.png) |
 | 22 | HPA scaling under load | `kubectl get hpa -w` output |
 
 ## Security
