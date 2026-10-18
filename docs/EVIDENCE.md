@@ -40,9 +40,10 @@ Text outputs are in [docs/evidence/](evidence/), screenshots in [docs/evidence/s
 |---|---|---|
 | 17 | Grafana "Medzo API" dashboard (last 1 hour): steady traffic from 21:07 (`/api/categories` 200, about 2.5 req/s), then from about 21:17 the 5xx ratio rises to 100% and p95/p99 hit the 10 s bucket while the laptop cluster was overloaded (MongoDB unreachable). The dashboard caught a real incident; error ratio and requests are split by version `50e0559` | [screenshot](evidence/screenshots/05-grafana-dashboard.png) |
 | 18 | Prometheus scrapes the api through the ServiceMonitor; each series carries `app_kubernetes_io_version="50e0559"` (UP pods; the DOWN ones were restarting while the laptop cluster was overloaded) | [screenshot](evidence/screenshots/04-prometheus-targets.png) |
-| 19 | Alert firing during MongoDB drill | not captured (same reason); rules are in `helm/medzo/templates/monitoring.yaml` |
-| 20 | Logs for one request in Loki | not captured (same reason) |
+| 19 | The 5 alert rules from the chart loaded into Prometheus (HighErrorRate, HighLatency, ApiNoReadyPods, PodRestarting, MongoDown), shown in Grafana Alerting; firing during the MongoDB drill not captured | [screenshot](evidence/screenshots/07-alert-rules.png) |
+| 20 | Logs in Loki via Grafana Explore: `{namespace="medzo-dev", container="api"}`, 401 lines over the last hour, JSON request logs with `service`, `version: 50e0559`, method, URL (shipped by Alloy) | [screenshot](evidence/screenshots/06-loki-logs.png) |
 | 21 | Traces in Jaeger from OpenTelemetry auto-instrumentation: trace list (failing `/readyz` calls marked as errors) and one `GET /healthz` trace with 5 spans (middleware, router, handler) | [list](evidence/screenshots/02-jaeger-traces-list.png), [trace](evidence/screenshots/03-jaeger-trace-detail.png) |
+| 19b | MongoDB outage drill: `MedzoMongoDown` and `MedzoApiNoReadyPods` pending after 30s, firing after their 2m `for`; api pods unready but not restarted | [08-alert-drill.txt](evidence/08-alert-drill.txt) |
 | 22 | HPA scaling under load | `kubectl get hpa -w` output |
 
 ## Security

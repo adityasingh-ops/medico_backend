@@ -1,0 +1,20 @@
+# Sun Oct 18 22:19:16 IST 2026  MongoDB outage drill
+$ kubectl scale sts medzo-mongodb -n medzo-dev --replicas=0   (at 22:16:36)
+
+Prometheus alerts (polled every 15s via /api/v1/alerts):
+22:16:36 (none)
+22:17:06 MedzoApiNoReadyPods:pending MedzoMongoDown:pending
+22:18:52 MedzoApiNoReadyPods:pending MedzoMongoDown:pending
+22:19:07 MedzoApiNoReadyPods:firing MedzoMongoDown:firing     (for: 2m elapsed)
+
+$ kubectl get pods -n medzo-dev
+NAME                           READY   STATUS      RESTARTS       AGE
+medzo-df69c7c95-hcdqs          0/1     Running     11 (23m ago)   73m
+medzo-df69c7c95-qcxc6          0/1     Running     4              72m
+medzo-redis-58974c7b59-c84n6   1/1     Running     2 (23m ago)    99m
+medzo-test-connection          0/1     Completed   0              92m
+medzo-traffic                  0/1     Completed   0              4m33s
+
+# api pods are Running but not Ready (readiness /readyz fails without MongoDB);
+# liveness /healthz still passes, so they are NOT restarted: the last restarts in the RESTARTS column
+# happened 23m earlier, during the laptop overload, not during this drill.

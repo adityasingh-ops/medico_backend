@@ -122,8 +122,7 @@ Note: the `dev` and CI paths use a test Secret from values; never use those valu
   this work but not yet committed at the baseline; they are in a separate first commit.
 - Running the whole platform (Prometheus, Loki, Alloy, Jaeger, Argo CD) next to the app on one 8 GB
   laptop overloaded the kind cluster: etcd readiness failed, probes timed out and Grafana became
-  unreachable for a while (the Grafana screenshot shows that incident as a 5xx/latency spike), so the
-  Loki and alert screenshots are missing. On real hardware these would run
+  unreachable for a while (the Grafana screenshot shows that incident as a 5xx/latency spike). On real hardware these would run
   on separate nodes; locally, install only what a demo needs.
 - Argo CD and the canary (Argo Rollouts) are configured but were not exercised end to end before the deadline.
 - AI assistance (Claude) was used to plan and implement parts of this project.
