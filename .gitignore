@@ -2,3 +2,9 @@ node_modules/
 dist/
 .env
 *.log
+.DS_Store
+
+# local app helpers, kept out of the repo
+INTEGRATION.md
+seed-demo.js
+clear-orders.js

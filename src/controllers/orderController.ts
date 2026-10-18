@@ -3,19 +3,74 @@ import { Order } from '../models/Order';
 import { Cart } from '../models/Cart';
 import { Medicine } from '../models/Product';
 import { Store } from '../models/Store';
+import Verification from '../models/Verification';
+import { SERVICE_RADIUS_M } from '../config/serviceArea';
 import mongoose from 'mongoose';
 
 export class OrderController {
     // Create a new order with optimal store selection algorithm
     async createOrder(req: Request, res: Response): Promise<void> {
+        const { longitude, latitude, deliveryAddress, paymentMethod = 'COD', verificationId } = req.body;
+        const maxDistance = req.body.maxDistance || SERVICE_RADIUS_M;
+
+        // Validate coordinates before touching the DB
+        const lng = Number(longitude);
+        const lat = Number(latitude);
+        if (!longitude || !latitude || isNaN(lng) || isNaN(lat)) {
+            res.status(400).json({ success: false, error: 'Valid location is required to place an order' });
+            return;
+        }
+
+        // MongoDB does NOT allow $near inside transactions — run this before starting
+        // the session. Uses the same service radius as the catalogue, so anything the
+        // user could add to the cart is genuinely orderable from their address.
+        const matchedRadius = Number(maxDistance) || SERVICE_RADIUS_M;
+
+        let nearbyStores: any[] = [];
+        try {
+            nearbyStores = await Store.find({
+                location: {
+                    $near: {
+                        $geometry: { type: 'Point', coordinates: [lng, lat] },
+                        $maxDistance: matchedRadius
+                    }
+                },
+                isVerified: true,
+                isActive: true
+            });
+        } catch (geoError) {
+            console.error('Geo query error:', geoError);
+            res.status(500).json({ success: false, error: 'Location search failed' });
+            return;
+        }
+
+        if (nearbyStores.length === 0) {
+            res.status(404).json({
+                success: false,
+                error: `We don't deliver to this address yet — no partner pharmacy within ${Math.round(matchedRadius / 1000)} km`,
+                serviceRadiusKm: Math.round(matchedRadius / 1000)
+            });
+            return;
+        }
+
+        const nearbyStoreIds = nearbyStores.map((s: any) => s._id);
+
         const session = await mongoose.startSession();
         session.startTransaction();
 
         try {
             const userId = req.user._id;
-            const { longitude, latitude, deliveryAddress, paymentMethod = 'COD' } = req.body;
 
-            const maxDistance = req.body.maxDistance || 5000; // Default 5km
+            // If a doctor verification was completed, the order carries a signed e-prescription.
+            let prescriptionVerified = false;
+            let signedPrescriptionRef: any = undefined;
+            if (verificationId) {
+                const verification = await Verification.findById(verificationId).session(session);
+                if (verification && verification.status === 'approved') {
+                    prescriptionVerified = true;
+                    signedPrescriptionRef = verification.signedPrescriptionId;
+                }
+            }
 
             // 1. Get the user's cart
             const cart = await Cart.findOne({ userId }).session(session);
@@ -38,313 +93,144 @@ export class OrderController {
                 medicineMap[med._id.toString()] = med;
             });
 
-            // 5. Get nearby stores
-            const nearbyStores = await Store.find({
-                location: {
-                    $near: {
-                        $geometry: {
-                            type: 'Point',
-                            coordinates: [Number(longitude), Number(latitude)]
-                        },
-                        $maxDistance: Number(maxDistance)
-                    }
-                },
-                isVerified: true,
-                isActive: true
-            }).session(session);
+            // 6. Single aggregation: for every nearby store, which cart medicines are in stock?
+            //    This replaces O(S + S²) separate Medicine.find() calls with one round-trip.
+            //
+            //    Result shape: [{ _id: storeId, meds: [medicineId, ...] }]
+            const coverageRaw: { _id: mongoose.Types.ObjectId; meds: mongoose.Types.ObjectId[] }[] =
+                await Medicine.aggregate([
+                    { $match: { _id: { $in: medicineIds }, isAvailable: true, stock: { $gte: 1 } } },
+                    // Keep only stores that are in the nearby list
+                    { $project: {
+                        stores: { $filter: { input: '$stores', as: 's', cond: { $in: ['$$s', nearbyStoreIds] } } }
+                    }},
+                    { $unwind: '$stores' },
+                    { $group: { _id: '$stores', meds: { $addToSet: '$_id' } } }
+                ]);
 
-            if (nearbyStores.length === 0) {
-                await session.abortTransaction();
-                session.endSession();
-                res.status(404).json({ success: false, error: 'No stores found nearby' });
-                return;
+            // coverage: storeId (string) → Set of medicineId strings it can fulfil
+            const coverage = new Map<string, Set<string>>();
+            for (const { _id, meds } of coverageRaw) {
+                coverage.set(_id.toString(), new Set(meds.map(id => id.toString())));
             }
 
-            // 6. First try: Find a single store with all medicines
-            for (const store of nearbyStores) {
-                const storeId = store._id.toString();
+            const needed = new Set(medicineIds.map((id: any) => id.toString()));
+            const prescriptionRequired = medicines.some((m: any) => m.requiresPrescription);
 
-                const availableMedicines = await Medicine.find({
-                    _id: { $in: medicineIds },
-                    stores: storeId,
-                    isAvailable: true,
-                    stock: { $gte: 1 } // At least 1 in stock
-                }).session(session);
-
-                if (availableMedicines.length === medicineIds.length) {
-                    // All medicines available in this store - create a single order
-                    const items = cart.items.map(item => {
-                        const medicine = medicineMap[item.medicineId.toString()];
-                        return {
-                            medicineId: item.medicineId,
-                            name: medicine.name,
-                            quantity: item.quantity,
-                            price: item.price
-                        };
+            // Helper: build order payload for a set of medicineId strings going to one store
+            const buildItems = (medIdSet: Set<string>) =>
+                cart.items
+                    .filter((item: any) => medIdSet.has(item.medicineId.toString()))
+                    .map((item: any) => {
+                        const med = medicineMap[item.medicineId.toString()];
+                        return { medicineId: item.medicineId, name: med.name, quantity: item.quantity, price: item.price };
                     });
 
-                    // Calculate total amounts
-                    const totalAmount = cart.totalAmount;
-                    const tax = totalAmount * 0.18; // 18% GST
-                    const deliveryFee = 40; // Fixed delivery fee
-                    const finalAmount = totalAmount + tax + deliveryFee;
+            const DELIVERY_FEE = 40;
+            const GST = 0.18;
 
-                    // Check if any medicine requires prescription
-                    const prescriptionRequired = await Medicine.findOne({
-                        _id: { $in: medicineIds },
-                        requiresPrescription: true
-                    }).session(session);
+            const makeOrderDoc = (storeId: any, items: any[], rxRequired: boolean) => {
+                const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
+                const tax = total * GST;
+                return {
+                    userId, storeId,
+                    items, totalAmount: total, tax,
+                    deliveryFee: DELIVERY_FEE, finalAmount: total + tax + DELIVERY_FEE,
+                    paymentMethod, paymentStatus: 'PENDING', deliveryAddress,
+                    currentStatus: 'PENDING',
+                    statusHistory: [{ status: 'PENDING', timestamp: new Date(), notes: 'Order placed successfully' }],
+                    estimatedDeliveryTime: new Date(Date.now() + 20 * 60 * 1000),
+                    prescriptionRequired: rxRequired, isPrescriptionVerified: prescriptionVerified,
+                    ...(signedPrescriptionRef ? { prescriptionImage: String(signedPrescriptionRef) } : {})
+                };
+            };
 
-
-                    // Create order
+            // 7. Phase 1 — single store, nearest first (in-memory check, no extra DB queries)
+            for (const store of nearbyStores) {
+                const covered = coverage.get(store._id.toString());
+                if (!covered) continue;
+                // Does this store carry every medicine we need?
+                if ([...needed].every(id => covered.has(id))) {
                     const order = await Order.create(
-                        [{
-                            userId,
-                            storeId: store._id,
-                            items,
-                            totalAmount,
-                            tax,
-                            deliveryFee,
-                            finalAmount,
-                            paymentMethod,
-                            paymentStatus: paymentMethod === 'COD' ? 'PENDING' : 'PENDING',
-                            deliveryAddress,
-                            currentStatus: 'PENDING',
-                            statusHistory: [
-                                {
-                                    status: 'PENDING',
-                                    timestamp: new Date(),
-                                    notes: 'Order placed successfully'
-                                }
-                            ],
-                            estimatedDeliveryTime: new Date(Date.now() + 20 * 60 * 1000),
-                            prescriptionRequired: !!prescriptionRequired,
-                            isPrescriptionVerified: false
-                        }],
+                        [makeOrderDoc(store._id, buildItems(needed), prescriptionRequired)],
                         { session }
                     );
-
-                    // Clear cart after successful order
-                    await Cart.findByIdAndUpdate(
-                        cart._id,
-                        { items: [], totalAmount: 0 },
-                        { session }
-                    );
-
-                    // Commit transaction
+                    await Cart.findByIdAndUpdate(cart._id, { items: [], totalAmount: 0 }, { session });
                     await session.commitTransaction();
                     session.endSession();
-
-                    // Return successful response
                     res.status(201).json({
                         success: true,
                         message: 'Order created successfully',
-                        data: order[0]
+                        data: order[0],
+                        store: store.name,
+                        serviceRadiusKm: Math.round(matchedRadius / 1000)
                     });
                     return;
                 }
             }
 
-            // 7. Second try: Find optimal combination of two stores
-            let bestCombination = null;
-            let maxCoverage = 0;
-
-            // For each pair of stores
+            // 8. Phase 2 — greedy 2-store cover, still in-memory (S² pairs, zero extra DB queries)
+            //
+            //    Iterate pairs in distance order so the combination with the two closest stores
+            //    that achieves full coverage wins.  For each valid pair we assign:
+            //      • store1 (closer) gets every item it can cover
+            //      • store2 (farther) gets whatever store1 cannot cover
+            //    This minimises the farther leg of the split.
             for (let i = 0; i < nearbyStores.length; i++) {
+                const s1 = nearbyStores[i];
+                const c1 = coverage.get(s1._id.toString()) ?? new Set<string>();
                 for (let j = i + 1; j < nearbyStores.length; j++) {
-                    const store1 = nearbyStores[i];
-                    const store2 = nearbyStores[j];
+                    const s2 = nearbyStores[j];
+                    const c2 = coverage.get(s2._id.toString()) ?? new Set<string>();
+                    // Union covers everything?
+                    if ([...needed].every(id => c1.has(id) || c2.has(id))) {
+                        const s1Meds = new Set([...needed].filter(id => c1.has(id)));
+                        const s2Meds = new Set([...needed].filter(id => !c1.has(id)));
 
-                    // Get medicines available in store1
-                    const availableMedicinesStore1 = await Medicine.find({
-                        _id: { $in: medicineIds },
-                        stores: store1._id.toString(),
-                        isAvailable: true,
-                        stock: { $gt: 0 }
-                    }).session(session);
+                        const rx1 = medicines.some((m: any) => s1Meds.has(m._id.toString()) && m.requiresPrescription);
+                        const rx2 = medicines.some((m: any) => s2Meds.has(m._id.toString()) && m.requiresPrescription);
 
-                    // Get medicines available in store2
-                    const availableMedicinesStore2 = await Medicine.find({
-                        _id: { $in: medicineIds },
-                        stores: store2._id.toString(),
-                        isAvailable: true,
-                        stock: { $gt: 0 }
-                    }).session(session);
+                        const [order1, order2] = await Promise.all([
+                            Order.create([makeOrderDoc(s1._id, buildItems(s1Meds), rx1)], { session }),
+                            Order.create([makeOrderDoc(s2._id, buildItems(s2Meds), rx2)], { session }),
+                        ]);
 
-                    // Create sets for easy comparison
-                    const availableInStore1 = new Set(availableMedicinesStore1.map(med => med._id.toString()));
-                    const availableInStore2 = new Set(availableMedicinesStore2.map(med => med._id.toString()));
-
-                    // Find total unique medicines covered by both stores
-                    const combinedCoverage = new Set([...availableInStore1, ...availableInStore2]);
-
-                    // If this combination covers more medicines than our current best, update it
-                    if (combinedCoverage.size > maxCoverage) {
-                        maxCoverage = combinedCoverage.size;
-                        bestCombination = {
-                            store1: {
-                                storeId: store1._id,
-                                storeName: store1.name,
-                                medicines: [...availableInStore1]
-                            },
-                            store2: {
-                                storeId: store2._id,
-                                storeName: store2.name,
-                                medicines: [...availableInStore2].filter(id => !availableInStore1.has(id)) // Only unique to store2
-                            },
-                            totalCoverage: combinedCoverage.size
-                        };
-
-                        // If we found a combination that covers all medicines, break early
-                        if (combinedCoverage.size === medicineIds.length) {
-                            break;
-                        }
+                        await Cart.findByIdAndUpdate(cart._id, { items: [], totalAmount: 0 }, { session });
+                        await session.commitTransaction();
+                        session.endSession();
+                        res.status(201).json({
+                            success: true,
+                            message: 'Orders split between two stores successfully',
+                            data: {
+                                orders: [order1[0], order2[0]],
+                                store1: s1.name,
+                                store2: s2.name,
+                                serviceRadiusKm: Math.round(matchedRadius / 1000)
+                            }
+                        });
+                        return;
                     }
-                }
-
-                // Break outer loop too if we found complete coverage
-                if (maxCoverage === medicineIds.length) {
-                    break;
                 }
             }
 
-            // 8. Process the best two-store combination
-            if (bestCombination && maxCoverage === medicineIds.length) {
-                // Create items for store 1
-                const store1Items = cart.items
-                    .filter(item => bestCombination.store1.medicines.includes(item.medicineId.toString()))
-                    .map(item => {
-                        const medicine = medicineMap[item.medicineId.toString()];
-                        return {
-                            medicineId: item.medicineId,
-                            name: medicine.name,
-                            quantity: item.quantity,
-                            price: item.price
-                        };
-                    });
-
-                // Create items for store 2
-                const store2Items = cart.items
-                    .filter(item => bestCombination.store2.medicines.includes(item.medicineId.toString()))
-                    .map(item => {
-                        const medicine = medicineMap[item.medicineId.toString()];
-                        return {
-                            medicineId: item.medicineId,
-                            name: medicine.name,
-                            quantity: item.quantity,
-                            price: item.price
-                        };
-                    });
-
-                // Calculate amounts for each store
-                const store1Total = store1Items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-                const store2Total = store2Items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-                const store1Tax = store1Total * 0.18;
-                const store2Tax = store2Total * 0.18;
-
-                const deliveryFee = 40; // Per store
-
-                const store1Final = store1Total + store1Tax + deliveryFee;
-                const store2Final = store2Total + store2Tax + deliveryFee;
-
-                // Check if any medicine requires prescription for each store
-                const store1PrescriptionRequired = medicines.some(med =>
-                    bestCombination.store1.medicines.includes(med._id.toString()) &&
-                    med.requiresPrescription
-                );
-
-                const store2PrescriptionRequired = medicines.some(med =>
-                    bestCombination.store2.medicines.includes(med._id.toString()) &&
-                    med.requiresPrescription
-                );
-
-                // Create two orders
-                const order1 = await Order.create(
-                    [{
-                        userId,
-                        storeId: bestCombination.store1.storeId,
-                        items: store1Items,
-                        totalAmount: store1Total,
-                        tax: store1Tax,
-                        deliveryFee,
-                        finalAmount: store1Final,
-                        paymentMethod,
-                        paymentStatus: paymentMethod === 'COD' ? 'PENDING' : 'PENDING',
-                        deliveryAddress,
-                        currentStatus: 'PENDING',
-                        statusHistory: [
-                            {
-                                status: 'PENDING',
-                                timestamp: new Date(),
-                                notes: 'Order placed successfully'
-                            }
-                        ],
-                        estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
-                        prescriptionRequired: store1PrescriptionRequired,
-                        isPrescriptionVerified: false
-                    }],
-                    { session }
-                );
-
-                const order2 = await Order.create(
-                    [{
-                        userId,
-                        storeId: bestCombination.store2.storeId,
-                        items: store2Items,
-                        totalAmount: store2Total,
-                        tax: store2Tax,
-                        deliveryFee,
-                        finalAmount: store2Final,
-                        paymentMethod,
-                        paymentStatus: paymentMethod === 'COD' ? 'PENDING' : 'PENDING',
-                        deliveryAddress,
-                        currentStatus: 'PENDING',
-                        statusHistory: [
-                            {
-                                status: 'PENDING',
-                                timestamp: new Date(),
-                                notes: 'Order placed successfully'
-                            }
-                        ],
-                        estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
-                        prescriptionRequired: store2PrescriptionRequired,
-                        isPrescriptionVerified: false
-                    }],
-                    { session }
-                );
-
-                // Clear cart after successful order creation
-                await Cart.findByIdAndUpdate(
-                    cart._id,
-                    { items: [], totalAmount: 0 },
-                    { session }
-                );
-
-                // Commit transaction
-                await session.commitTransaction();
-                session.endSession();
-
-                // Return successful response
-                res.status(201).json({
-                    success: true,
-                    message: 'Orders split between two stores successfully',
-                    data: {
-                        orders: [order1[0], order2[0]],
-                        store1: bestCombination.store1.storeName,
-                        store2: bestCombination.store2.storeName
-                    }
-                });
-                return;
-            }
-
-            // 9. If we can't fulfill all medicines even with two stores
+            // 9. No combination of ≤ 2 nearby stores can cover the full cart
             await session.abortTransaction();
             session.endSession();
+            // Name the items no reachable pharmacy stocks — a bare failure gave the
+            // user nothing to act on.
+            const coverable = new Set<string>();
+            for (const set of coverage.values()) for (const id of set) coverable.add(id);
+            const unavailable = [...needed]
+                .filter(id => !coverable.has(id))
+                .map(id => medicineMap[id]?.name)
+                .filter(Boolean);
+
             res.status(404).json({
                 success: false,
-                error: 'Cannot fulfill your order even with two stores',
-                availableMedicines: maxCoverage,
+                error: unavailable.length
+                    ? `Not stocked by any pharmacy near you: ${unavailable.join(', ')}`
+                    : 'No single pharmacy (or pair) near you can cover your whole cart',
+                unavailableItems: unavailable,
                 totalMedicines: medicineIds.length
             });
 

@@ -85,7 +85,8 @@ export const loginStore = async (req: Request, res: Response) => {
     }
 
     // Find store by email
-    const store = await Store.findOne({ email });
+    // password is select:false on the schema — opt in for the credential check.
+    const store = await Store.findOne({ email }).select('+password');
     if (!store) {
       return res.status(401).json({
         success: false,

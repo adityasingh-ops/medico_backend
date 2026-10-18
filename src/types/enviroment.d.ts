@@ -6,6 +6,7 @@ declare global {
             JWT_SECRET: string;
             NODE_ENV: 'development' | 'production';
             CLIENT_URL: string;
+            ANTHROPIC_API_KEY: string;
         }
     }
 }

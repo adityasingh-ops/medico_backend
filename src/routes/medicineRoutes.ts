@@ -7,6 +7,7 @@ const controller = new MedicineController();
 router.post('/', controller.create);
 router.post('/bulk', controller.bulkCreate);
 router.get('/', controller.getAll);
+router.get('/nearby', controller.getNearbyMedicines); // must precede '/:id'
 router.get('/:id', controller.getById);
 router.put('/:id', controller.update);
 router.delete('/:id', controller.delete);

@@ -1,0 +1,51 @@
+# CI deploy-test job: Helm install on a throwaway kind cluster, helm test, smoke test
+# Run:  https://github.com/adityasingh-ops/medico_backend/actions/runs/39134599741
+# Job:  https://github.com/adityasingh-ops/medico_backend/actions/runs/39134599741/job/117697183134
+# Commit under test: ed53617 (PR #3, merge ref 3f69de2). Copied from the job log, timestamps removed.
+
+Image: "medzo-api:dev" with ID "sha256:3e7d608684f58bfb4e055a41589fe0ae9b2e9aaf944ea6fb5474cf4d3ac094b5" not yet present on node "ci-control-plane", loading...
+Release "medzo" does not exist. Installing it now.
+NAME: medzo
+LAST DEPLOYED: Sun Oct 18 14:12:37 2026
+NAMESPACE: medzo-ci
+STATUS: deployed
+REVISION: 1
+NOTES:
+Medzo API dev deployed to namespace medzo-ci.
+
+Check it:
+  kubectl get pods -n medzo-ci -l app.kubernetes.io/instance=medzo
+  curl http://localhost/version
+  curl http://localhost/readyz
+helm test medzo -n medzo-ci --logs
+NAME: medzo
+LAST DEPLOYED: Sun Oct 18 14:12:37 2026
+NAMESPACE: medzo-ci
+STATUS: deployed
+REVISION: 1
+TEST SUITE:     medzo-test-connection
+Last Started:   Sun Oct 18 14:13:00 2026
+Last Completed: Sun Oct 18 14:13:04 2026
+Phase:          Succeeded
+NOTES:
+Medzo API dev deployed to namespace medzo-ci.
+
+Check it:
+  kubectl get pods -n medzo-ci -l app.kubernetes.io/instance=medzo
+  curl http://localhost/version
+  curl http://localhost/readyz
+
+POD LOGS: medzo-test-connection
+{"status":"ready"}{"version":"dev","commit":"3f69de2"}
+kubectl port-forward -n medzo-ci svc/medzo 5858:5858 &
+sleep 3
+curl -sf localhost:5858/readyz
+curl -sf localhost:5858/version | tee /dev/stderr | grep -q '"version":"dev"'
+curl -sf localhost:5858/api/categories
+Forwarding from 127.0.0.1:5858 -> 5858
+Forwarding from [::1]:5858 -> 5858
+Handling connection for 5858
+{"status":"ready"}Handling connection for 5858
+Handling connection for 5858
+Post job cleanup.
+Error response from daemon: No such container: kind-registry

@@ -1,0 +1,27 @@
+# Sun Oct 18 20:46:26 IST 2026  Rolling restart while sending requests every 0.1s
+$ kubectl get deploy medzo -n medzo-dev -o jsonpath={.spec.strategy}{"\n"}
+{"rollingUpdate":{"maxSurge":1,"maxUnavailable":0},"type":"RollingUpdate"}
+
+$ kubectl rollout restart deploy/medzo -n medzo-dev
+deployment.apps/medzo restarted
+
+$ kubectl rollout status deploy/medzo -n medzo-dev --timeout=180s
+Waiting for deployment "medzo" rollout to finish: 0 out of 2 new replicas have been updated...
+Waiting for deployment "medzo" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "medzo" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "medzo" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "medzo" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "medzo" rollout to finish: 1 old replicas are pending termination...
+deployment "medzo" successfully rolled out
+
+Responses during the restart (count status):
+ 426 200
+
+$ kubectl get pods -n medzo-dev -o wide
+NAME                           READY   STATUS      RESTARTS   AGE     IP            NODE            NOMINATED NODE   READINESS GATES
+medzo-7fb4f58b56-6kmnc         1/1     Running     0          53s     10.244.2.15   medzo-worker    <none>           <none>
+medzo-7fb4f58b56-fnj7k         1/1     Running     0          57s     10.244.2.14   medzo-worker    <none>           <none>
+medzo-mongodb-0                1/1     Running     0          4m18s   10.244.1.6    medzo-worker2   <none>           <none>
+medzo-redis-58974c7b59-c84n6   1/1     Running     0          7m56s   10.244.2.3    medzo-worker    <none>           <none>
+medzo-test-connection          0/1     Completed   0          64s     10.244.2.13   medzo-worker    <none>           <none>
+

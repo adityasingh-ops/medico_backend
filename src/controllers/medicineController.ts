@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { Medicine } from '../models/Product';
+import { Store } from '../models/Store';
+import { SERVICE_RADIUS_M } from '../config/serviceArea';
 
 export class MedicineController {
     async create(req: Request, res: Response) {
@@ -120,6 +122,57 @@ export class MedicineController {
             return res.status(500).json({ error: error.message });
         }
     }
+    // Distance-scoped inventory: only medicines stocked by stores within range.
+    // Each returned medicine's `stores` is narrowed to the *nearby* stores that
+    // stock it, so the consumer always adds to cart from a reachable store.
+    async getNearbyMedicines(req: Request, res: Response) {
+        try {
+            const { longitude, latitude, maxDistance = SERVICE_RADIUS_M } = req.query;
+            if (!longitude || !latitude) {
+                return res.status(400).json({ error: 'longitude and latitude are required' });
+            }
+
+            // One fixed service radius, shared with store listing and order
+            // routing, so the catalogue and checkout always agree on whether an
+            // address is serviceable.
+            const radius = Number(maxDistance) || SERVICE_RADIUS_M;
+
+            const nearbyStores = await Store.find({
+                location: {
+                    $near: {
+                        $geometry: { type: 'Point', coordinates: [Number(longitude), Number(latitude)] },
+                        $maxDistance: radius
+                    }
+                },
+                isActive: true
+            }).select('name address operatingHours rating isVerified location');
+
+            // Empty is a meaningful answer: no pharmacy serves this address.
+            if (nearbyStores.length === 0) return res.json([]);
+
+            const storeById = new Map(nearbyStores.map((s: any) => [s._id.toString(), s]));
+            const nearbyIds = Array.from(storeById.keys());
+
+            const medicines = await Medicine.find({
+                stores: { $in: nearbyIds },
+                isAvailable: true
+            })
+                .populate('categoryId')
+                .lean();
+
+            const result = medicines.map((m: any) => ({
+                ...m,
+                stores: (m.stores || [])
+                    .map((id: any) => storeById.get(id.toString()))
+                    .filter(Boolean)
+            }));
+
+            return res.json(result);
+        } catch (error: any) {
+            console.error('Error in getNearbyMedicines:', error);
+            return res.status(500).json({ error: error.message });
+        }
+    }
     async getMedicineByCategory(req: Request, res: Response) {
         try {
             const { categoryId } = req.params;
@@ -128,12 +181,8 @@ export class MedicineController {
                 .populate('stores')
                 .sort({ createdAt: -1 });
 
-            if (!medicines.length) {
-                return res.status(404).json({
-                    message: 'No medicines found in this category'
-                });
-            }
-            console.log('medicines:------------->>>>>>>', medicines);
+            // An empty category is a valid result — 404 made the category screen
+            // render an error instead of an empty state.
             return res.json(medicines);
         } catch (error: any) {
             return res.status(500).json({

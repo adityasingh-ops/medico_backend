@@ -1,0 +1,49 @@
+# Local run without Kubernetes: API + MongoDB + Redis + Jaeger (traces).
+#   cp .env.example .env   (then set JWT_SECRET in .env)
+#   docker compose up --build
+# MongoDB has no auth here and no published port: only the api container on
+# this compose network can reach it. Kubernetes uses authenticated MongoDB.
+#   curl localhost:5858/readyz
+#   Jaeger UI: http://localhost:16686
+services:
+  mongodb:
+    image: mongo:7
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+
+  jaeger:
+    image: jaegertracing/jaeger:2.22.0
+    ports:
+      - "16686:16686"
+
+  api:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017/medzo
+      REDIS_URL: redis://redis:6379
+      NODE_OPTIONS: --require @opentelemetry/auto-instrumentations-node/register
+      OTEL_SERVICE_NAME: medzo-api
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "5858:5858"
+
+volumes:
+  mongo-data:

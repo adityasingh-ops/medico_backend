@@ -1,104 +1,74 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import express, { Express, Request, Response, NextFunction } from 'express';
-import { Server } from 'socket.io';
 import { createServer } from 'http';
-import cors from 'cors';
-import connectDB from './config/db';
-import errorHandler from './middleware/errorHandler';
 import mongoose from 'mongoose';
-
-// Import routes
-import userRoutes from './routes/userRoutes';
-import categoryRoutes from './routes/categoryRoutes';
-import medicineRoutes from './routes/medicineRoutes';
-import storeRoutes from './routes/storeRoutes';
-import cartRoutes from './routes/cartRoutes';
-import searchRoutes from './routes/searchRoutes';
-import chatRoutes from './routes/chatRoutes';
-import storeMessageRoutes from './routes/storeMessageRoutes';
-import orderRoutes from './routes/orderRoutes';
+import app from './app';
+import connectDB from './config/db';
+import { logger } from './observability/logger';
 
 // Import socket handlers
-import { initializeSocket } from './socket';
+import { initializeSocket, getSocketIO } from './socket';
+import { attachRedisAdapter, closeRedisAdapter } from './socket/redisAdapter';
 
-const app: Express = express();
 const httpServer = createServer(app);
 
 // Initialize socket handlers with httpServer
 initializeSocket(httpServer);
 
-// Connect to database with error handling
-(async () => {
-  try {
-    await connectDB();
-    console.log('Database connection established');
-  } catch (error) {
-    console.error('Failed to connect to database:', error);
-    process.exit(1);
-  }
-})();
-
-// Middleware
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Routes
-app.use('/api/users', userRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/medicines', medicineRoutes);
-app.use('/api/stores', storeRoutes);
-app.use('/api/cart', cartRoutes);
-app.use('/api/search', searchRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/store/messages', storeMessageRoutes);
-app.use('/api/orders', orderRoutes);
-
-// Root route
-app.get('/', (req: Request, res: Response) => {
-  res.send('Medico API is running...');
-});
-
-// Handle 404 routes
-app.use((req: Request, res: Response) => {
-  res.status(404).json({ message: 'Route not found' });
-});
-
-// Global error handler
-app.use(errorHandler);
-
 const PORT: number = parseInt(process.env.PORT || '5000', 10);
 
-// const httpServer = createServer(app);
-
-// httpServer.listen(PORT, () => {
-//   console.log(`Server running on port ${PORT}`);
-// });
-
-httpServer.listen(PORT, '0.0.0.0', () => {             ///my flat
-  console.log(`Server running on http://192.168.1.7:${PORT}`);
-});
-// httpServer.listen(PORT, '0.0.0.0', () => {          //stanza   
-//   console.log(`Server running on http://10.51.2.200:${PORT}`);
-// });
-// httpServer.listen(PORT, '0.0.0.0', () => {
-//   console.log(`Server running on http://192.168.1.4:${PORT}`);
-// });
-
-// Handle process termination
-process.on('SIGINT', async () => {
+const start = async () => {
   try {
-    await mongoose.connection.close();
-    console.log('MongoDB connection closed through app termination');
-    process.exit(0);
-  } catch (err) {
-    console.error('Error during app termination:', err);
+    await connectDB();
+    logger.info('Database connection established');
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to connect to database');
     process.exit(1);
   }
-});
+
+  // With more than one replica, socket.io rooms must be shared through Redis,
+  // otherwise a message sent on pod A never reaches a client connected to pod B.
+  if (process.env.REDIS_URL) {
+    await attachRedisAdapter(getSocketIO(), process.env.REDIS_URL);
+  }
+
+  // Bound to 0.0.0.0 → reachable on every interface (needed inside a container).
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    logger.info({ port: PORT, version: process.env.APP_VERSION || 'dev' }, 'Server listening');
+  });
+};
+
+start();
+
+// Kubernetes stops a pod with SIGTERM (Ctrl+C locally sends SIGINT).
+// Stop taking new connections, let in-flight requests finish, then close
+// sockets, Redis and MongoDB. terminationGracePeriodSeconds in the chart
+// is the hard limit.
+let shuttingDown = false;
+const shutdown = async (signal: string) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info({ signal }, 'Shutting down');
+
+  const forceExit = setTimeout(() => {
+    logger.error('Graceful shutdown timed out, forcing exit');
+    process.exit(1);
+  }, 25_000);
+  forceExit.unref();
+
+  try {
+    getSocketIO().close();
+    await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+    await closeRedisAdapter();
+    await mongoose.connection.close();
+    logger.info('Shutdown complete');
+    process.exit(0);
+  } catch (err) {
+    logger.error({ err }, 'Error during shutdown');
+    process.exit(1);
+  }
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

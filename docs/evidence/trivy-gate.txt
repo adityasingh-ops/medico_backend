@@ -1,0 +1,28 @@
+# Trivy image scan as a CI gate (HIGH/CRITICAL, fixable only)
+
+## 1. First PR run: pipeline blocked the image
+Run: https://github.com/adityasingh-ops/medico_backend/actions/runs/39130852093  (job "build" failed)
+
+  OS packages (alpine 3.24.2):  Total: 0 (HIGH: 0, CRITICAL: 0)
+  Node.js packages:             Total: 26 (HIGH: 25, CRITICAL: 1)
+
+  Vulnerable packages and fixed versions (from `trivy image --format json`):
+    axios 1.7.9            -> 1.16.0 (10 CVEs incl. CVE-2025-27152 SSRF/credential leak)
+    engine.io 6.6.4        -> 6.6.10
+    ip-address 9.0.5       -> 10.3.1
+    jws 3.2.2 / 4.0.0      -> 3.2.3 / 4.0.1
+    mongoose 7.8.6         -> 7.8.9
+    path-to-regexp 0.1.12  -> 0.1.13
+    proxy-addr 2.0.7       -> 2.0.8
+    socket.io-parser 4.2.4 -> 4.2.7
+    ws 8.17.1              -> 8.21.0
+  deploy-test and publish were skipped, so the vulnerable image never reached the registry.
+
+## 2. Fix
+`npm update` within the existing semver ranges (no major upgrades):
+  axios 1.20.0, express 4.22.3, jsonwebtoken 9.0.3, mongoose 7.8.12, socket.io 4.8.4
+Tests still pass (8/8), typecheck passes.
+
+## 3. Re-scan
+Local:  trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 medzo-api:scan  -> exit code 0
+CI:     https://github.com/adityasingh-ops/medico_backend/actions/runs/39134599741  (build: success)

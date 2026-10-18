@@ -1,0 +1,22 @@
+# Sun Oct 18 20:47:26 IST 2026  Self-healing and persistent data
+$ create a category, then delete the MongoDB pod
+{"success":true,"data":{"name":"evidence-50e0559","color":"#2E7D32","createdAt":"2026-10-18T15:17:26.344Z","updatedAt":"2026-10-18T15:17:26.344Z","id":"6ad4e3067318b2bf97ec47a5"}}
+
+$ kubectl delete pod medzo-mongodb-0 -n medzo-dev
+pod "medzo-mongodb-0" deleted from medzo-dev namespace
+
+$ kubectl wait pod medzo-mongodb-0 -n medzo-dev --for=condition=ready --timeout=180s
+pod/medzo-mongodb-0 condition met
+
+$ curl -s http://localhost/api/categories   (category still there after the pod was recreated)
+"name":"evidence-50e0559"
+
+
+$ kubectl delete pod medzo-7fb4f58b56-6kmnc -n medzo-dev
+pod "medzo-7fb4f58b56-6kmnc" deleted from medzo-dev namespace
+
+$ kubectl get pods -n medzo-dev -l app.kubernetes.io/component=api -o wide
+NAME                     READY   STATUS    RESTARTS   AGE   IP            NODE            NOMINATED NODE   READINESS GATES
+medzo-7fb4f58b56-fnj7k   1/1     Running   0          91s   10.244.2.14   medzo-worker    <none>           <none>
+medzo-7fb4f58b56-q2jnx   1/1     Running   0          6s    10.244.1.9    medzo-worker2   <none>           <none>
+

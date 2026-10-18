@@ -1,0 +1,45 @@
+# Prometheus + Alertmanager + Grafana + kube-state-metrics + node-exporter
+prometheus:
+  prometheusSpec:
+    # Pick up ServiceMonitors and PrometheusRules from every namespace,
+    # not only the ones labelled with this Helm release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    retention: 3d
+    resources:
+      requests: { cpu: 100m, memory: 512Mi }
+
+grafana:
+  adminPassword: admin   # local only
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
+  # Logs and traces next to the metrics, so one Grafana answers all three
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      url: http://loki.observability:3100
+    - name: Jaeger
+      type: jaeger
+      uid: jaeger
+      url: http://jaeger-query.observability:16686
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+
+# kind runs these control-plane parts with no metrics endpoint reachable
+kubeEtcd: { enabled: false }
+kubeControllerManager: { enabled: false }
+kubeScheduler: { enabled: false }
+kubeProxy: { enabled: false }
+
+# Docker Desktop / kind: the host root mount fails ("not a shared or slave mount")
+prometheus-node-exporter:
+  hostRootFsMount:
+    enabled: false

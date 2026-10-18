@@ -1,0 +1,15 @@
+# Sun Oct 18 20:46:26 IST 2026  (through ingress-nginx on http://localhost)
+$ curl -s -w ' [HTTP %{http_code}]' http://localhost/healthz
+ [HTTP 200]
+
+$ curl -s -w ' [HTTP %{http_code}]' http://localhost/readyz
+{"status":"ready"} [HTTP 200]
+
+$ curl -s -w ' [HTTP %{http_code}]' http://localhost/version
+{"version":"50e0559","commit":"50e0559"} [HTTP 200]
+
+$ curl -s -w ' [HTTP %{http_code}]' http://localhost/api/categories
+{"success":true,"data":[]} [HTTP 200]
+
+$ curl -s http://localhost/metrics   (first lines with http_requests_total)
+http_requests_total{method="GET",route="/api/categories/",status_code="200"} 1
