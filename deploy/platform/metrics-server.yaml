@@ -1,0 +1,4 @@
+# kind kubelets use self-signed certs, so metrics-server must skip TLS verification.
+# Needed by the HPA (CPU usage) and `kubectl top`.
+args:
+  - --kubelet-insecure-tls

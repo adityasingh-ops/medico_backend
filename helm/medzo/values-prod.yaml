@@ -1,0 +1,21 @@
+# "Prod" on the local cluster, synced by Argo CD.
+# CI's promote job updates image.tag below after the approval gate.
+image:
+  tag: "1.0.0"
+
+replicaCount: 3
+
+autoscaling:
+  minReplicas: 3
+  maxReplicas: 6
+
+secrets:
+  # Created by hand, never in git: see docs/RUNBOOK.md "Secrets"
+  existingSecret: medzo-secrets
+
+mongodb:
+  storage: 2Gi
+
+tracing:
+  # Keep 20% of traces; errors are still visible in metrics and logs.
+  samplerArg: "0.2"

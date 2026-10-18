@@ -1,0 +1,90 @@
+{{- $api := dict "root" . "component" "api" -}}
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+# Prometheus scrapes /metrics on every api pod every 15s
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "medzo.fullname" . }}
+  labels:
+    {{- include "medzo.componentLabels" $api | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "medzo.componentSelectorLabels" $api | nindent 6 }}
+  # Copy these pod labels onto every series so we can split metrics by
+  # release (canary vs stable) and by version.
+  podTargetLabels:
+    - rollouts-pod-template-hash
+    - app.kubernetes.io/version
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+{{- end }}
+{{- if .Values.monitoring.prometheusRule.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "medzo.fullname" . }}
+  labels:
+    {{- include "medzo.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: medzo-api
+      rules:
+        - alert: MedzoHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}",status_code=~"5.."}[5m]))
+              / sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}"}[5m])) > 0.05
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: More than 5% of Medzo API requests are failing with 5xx
+            runbook: docs/RUNBOOK.md#high-error-rate
+        - alert: MedzoHighLatency
+          expr: |
+            histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace="{{ .Release.Namespace }}"}[5m]))) > 1
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: Medzo API p95 latency is above 1s
+            runbook: docs/RUNBOOK.md#high-latency
+        - alert: MedzoApiNoReadyPods
+          expr: |
+            sum(kube_pod_status_ready{namespace="{{ .Release.Namespace }}",condition="true",pod=~"{{ include "medzo.fullname" . }}-.*",pod!~"{{ include "medzo.fullname" . }}-(mongodb|redis|test-connection).*"}) < 1
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: No Medzo API pod is ready (users get 503)
+            runbook: docs/RUNBOOK.md#api-down
+        - alert: MedzoPodRestarting
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="{{ .Release.Namespace }}"}[15m]) > 3
+          labels: { severity: warning }
+          annotations:
+            summary: "{{ "{{" }} $labels.pod {{ "}}" }} restarted more than 3 times in 15 minutes"
+            runbook: docs/RUNBOOK.md#crashloop
+        - alert: MedzoMongoDown
+          expr: |
+            kube_statefulset_status_replicas_ready{namespace="{{ .Release.Namespace }}",statefulset="{{ include "medzo.fullname" . }}-mongodb"} < 1
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: MongoDB is not ready; api pods will fail readiness
+            runbook: docs/RUNBOOK.md#mongodb-down
+{{- end }}
+{{- if .Values.monitoring.dashboard.enabled }}
+---
+# Grafana's sidecar loads every ConfigMap with this label as a dashboard
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "medzo.fullname" . }}-dashboard
+  labels:
+    {{- include "medzo.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  medzo.json: |
+{{ .Files.Get "dashboards/medzo.json" | indent 4 }}
+{{- end }}

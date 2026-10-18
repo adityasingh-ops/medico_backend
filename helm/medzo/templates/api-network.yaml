@@ -1,0 +1,157 @@
+{{- $api := dict "root" . "component" "api" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "medzo.fullname" . }}
+  labels:
+    {{- include "medzo.componentLabels" $api | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "medzo.componentSelectorLabels" $api | nindent 4 }}
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "medzo.fullname" . }}
+  labels:
+    {{- include "medzo.componentLabels" $api | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - {{- with .Values.ingress.host }}
+      host: {{ . | quote }}
+      {{- end }}
+      http:
+        paths:
+          # /socket.io/ (chat) and /api/ both go to the api pods
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "medzo.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}
+{{- if .Values.serviceAccount.create }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "medzo.serviceAccountName" . }}
+  labels:
+    {{- include "medzo.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+{{- end }}
+{{- if .Values.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "medzo.fullname" . }}
+  labels:
+    {{- include "medzo.componentLabels" $api | nindent 4 }}
+spec:
+  scaleTargetRef:
+    {{- if .Values.rollout.enabled }}
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    {{- else }}
+    apiVersion: apps/v1
+    kind: Deployment
+    {{- end }}
+    name: {{ include "medzo.fullname" . }}
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- if .Values.podDisruptionBudget.enabled }}
+---
+# Keeps at least one api pod up while nodes are drained
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "medzo.fullname" . }}
+  labels:
+    {{- include "medzo.componentLabels" $api | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "medzo.componentSelectorLabels" $api | nindent 6 }}
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+---
+# api pods: only the ingress controller and Prometheus may connect
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "medzo.fullname" . }}-api
+  labels:
+    {{- include "medzo.componentLabels" $api | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "medzo.componentSelectorLabels" $api | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace }}
+        # helm test pod and in-cluster load generator
+        - podSelector:
+            matchLabels:
+              medzo-client: "true"
+      ports:
+        - port: http
+{{- range $component := list "mongodb" "redis" }}
+{{- if (index $.Values $component).enabled }}
+---
+# {{ $component }}: only reachable from the api pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "medzo.fullname" $ }}-{{ $component }}
+  labels:
+    {{- include "medzo.componentLabels" (dict "root" $ "component" $component) | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "medzo.componentSelectorLabels" (dict "root" $ "component" $component) | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "medzo.componentSelectorLabels" $api | nindent 14 }}
+{{- end }}
+{{- end }}
+{{- end }}

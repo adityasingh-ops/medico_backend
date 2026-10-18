@@ -1,0 +1,179 @@
+# Default values for medzo. Shared by every environment.
+# values-dev.yaml and values-prod.yaml only override what is different,
+# so the environments cannot drift apart.
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/adityasingh-ops/medzo-api
+  pullPolicy: IfNotPresent
+  # Overridden by CI with the git commit SHA.
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: false
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000   # "node" user in the node:alpine image
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+service:
+  type: ClusterIP
+  port: 5858
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ""          # empty = match any host (localhost on kind)
+  annotations:
+    # socket.io falls back to HTTP long-polling, which needs every request of a
+    # session to hit the same pod. A cookie pins the client to one pod.
+    nginx.ingress.kubernetes.io/affinity: cookie
+    nginx.ingress.kubernetes.io/session-cookie-name: medzo-route
+    # Keep websocket connections open (default is 60s)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # Prescription images are sent as base64 (express limit is 15mb)
+    nginx.ingress.kubernetes.io/proxy-body-size: 15m
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 192Mi
+  limits:
+    memory: 384Mi   # no CPU limit: avoids throttling, requests still drive scheduling and HPA
+
+startupProbe:
+  httpGet: { path: /healthz, port: http }
+  periodSeconds: 2
+  failureThreshold: 30     # up to 60s to boot
+livenessProbe:
+  httpGet: { path: /healthz, port: http }
+  periodSeconds: 10
+  failureThreshold: 3
+readinessProbe:
+  httpGet: { path: /readyz, port: http }
+  periodSeconds: 5
+  failureThreshold: 2
+
+# Seconds Kubernetes waits after SIGTERM before SIGKILL. The app force-exits at 25s.
+terminationGracePeriodSeconds: 30
+# Sleep before SIGTERM so the endpoint is removed from the Service and Ingress
+# first, otherwise a few requests hit a pod that is already shutting down.
+preStopSleepSeconds: 5
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Spread api pods over different nodes so one node failure does not take all of them.
+topologySpread:
+  enabled: true
+  maxSkew: 1
+  whenUnsatisfiable: ScheduleAnyway
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Non-secret settings -> ConfigMap -> env vars
+config:
+  NODE_ENV: production
+  PORT: "5858"
+  LOG_LEVEL: info
+  CLIENT_URL: http://localhost
+  SERVICE_RADIUS_M: "10000"
+  # Feature flag: turn the AI prescription reader off without a redeploy
+  FEATURE_AI_PRESCRIPTIONS: "true"
+
+# Secrets. In prod set existingSecret and create it outside git (see docs/RUNBOOK.md).
+# The Secret must have the keys: MONGODB_URI, JWT_SECRET, ANTHROPIC_API_KEY,
+# TWO_FACTOR_API_KEY, MONGO_ROOT_USER, MONGO_ROOT_PASSWORD
+secrets:
+  existingSecret: ""
+  jwtSecret: change-me
+  anthropicApiKey: ""
+  twoFactorApiKey: ""
+  mongoRootUser: medzo
+  mongoRootPassword: change-me
+
+mongodb:
+  enabled: true
+  image: mongo:7
+  database: medzo
+  storage: 1Gi
+  storageClass: ""   # empty = cluster default (local-path on kind)
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+redis:
+  enabled: true
+  image: redis:7-alpine
+  resources:
+    requests: { cpu: 20m, memory: 32Mi }
+    limits: { memory: 64Mi }
+
+# OpenTelemetry auto-instrumentation (no code changes): traces go to Jaeger.
+tracing:
+  enabled: true
+  endpoint: http://jaeger-collector.observability:4318
+  sampler: parentbased_traceidratio
+  samplerArg: "1.0"
+
+# Argo Rollouts canary. When disabled, a plain Deployment with a rolling update is used.
+rollout:
+  enabled: true
+  steps:
+    - setWeight: 25
+    - pause: { duration: 2m }
+    - setWeight: 50
+    - pause: { duration: 2m }
+  analysis:
+    enabled: true
+    prometheusAddress: http://monitoring-kube-prometheus-prometheus.monitoring:9090
+    successRate: 0.95        # canary must answer >= 95% of requests without 5xx
+    p95LatencySeconds: 1     # and keep p95 latency under 1s
+    interval: 30s
+    failureLimit: 2
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+  prometheusRule:
+    enabled: true
+  dashboard:
+    enabled: true
+
+networkPolicy:
+  enabled: true
+  # Namespaces allowed to reach the api pods
+  ingressNamespace: ingress-nginx
+  monitoringNamespace: monitoring

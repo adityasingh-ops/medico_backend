@@ -1,0 +1,81 @@
+{{- if .Values.mongodb.enabled }}
+{{- $m := .Values.mongodb }}
+{{- $db := dict "root" . "component" "mongodb" }}
+# Single MongoDB pod with its own persistent volume. A StatefulSet keeps the
+# same name and volume when the pod is recreated. In a real deployment this
+# would be a managed database (MongoDB Atlas) or a 3-member replica set.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "medzo.fullname" . }}-mongodb
+  labels:
+    {{- include "medzo.componentLabels" $db | nindent 4 }}
+spec:
+  serviceName: {{ include "medzo.fullname" . }}-mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "medzo.componentSelectorLabels" $db | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "medzo.componentLabels" $db | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 999   # mongodb user in the official image
+      containers:
+        - name: mongodb
+          image: {{ $m.image }}
+          ports:
+            - name: mongodb
+              containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom: { secretKeyRef: { name: {{ include "medzo.secretName" . }}, key: MONGO_ROOT_USER } }
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "medzo.secretName" . }}, key: MONGO_ROOT_PASSWORD } }
+          readinessProbe:
+            exec:
+              command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml $m.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with $m.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $m.storage }}
+---
+# Headless service: stable DNS name for the StatefulSet pod
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "medzo.fullname" . }}-mongodb
+  labels:
+    {{- include "medzo.componentLabels" $db | nindent 4 }}
+spec:
+  clusterIP: None
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: mongodb
+  selector:
+    {{- include "medzo.componentSelectorLabels" $db | nindent 4 }}
+{{- end }}

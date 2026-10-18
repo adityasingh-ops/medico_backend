@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "medzo.fullname" . }}-test-connection"
+  labels:
+    {{- include "medzo.labels" . | nindent 4 }}
+    medzo-client: "true"
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  containers:
+    - name: wget
+      image: busybox:1.36
+      command: ['sh', '-c']
+      # readyz only passes when the api can reach MongoDB
+      args:
+        - wget -qO- http://{{ include "medzo.fullname" . }}:{{ .Values.service.port }}/readyz &&
+          wget -qO- http://{{ include "medzo.fullname" . }}:{{ .Values.service.port }}/version
+  restartPolicy: Never

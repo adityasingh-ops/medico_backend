@@ -1,0 +1,59 @@
+{{- if .Values.redis.enabled }}
+{{- $r := .Values.redis }}
+{{- $rd := dict "root" . "component" "redis" }}
+# Redis is only used as a pub/sub bus for socket.io between api pods.
+# Nothing is stored, so there is no volume: if it restarts, clients reconnect.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "medzo.fullname" . }}-redis
+  labels:
+    {{- include "medzo.componentLabels" $rd | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "medzo.componentSelectorLabels" $rd | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "medzo.componentLabels" $rd | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: redis
+          image: {{ $r.image }}
+          args: ["--save", "", "--appendonly", "no"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: redis }
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          resources:
+            {{- toYaml $r.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "medzo.fullname" . }}-redis
+  labels:
+    {{- include "medzo.componentLabels" $rd | nindent 4 }}
+spec:
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+  selector:
+    {{- include "medzo.componentSelectorLabels" $rd | nindent 4 }}
+{{- end }}

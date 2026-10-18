@@ -1,0 +1,52 @@
+{{- $api := dict "root" . "component" "api" -}}
+{{- if .Values.rollout.enabled }}
+# Canary release with Argo Rollouts. Without a traffic router, setWeight is
+# done by pod count: 25% of 4 pods = 1 canary pod behind the same Service.
+# https://argoproj.github.io/argo-rollouts/features/canary/
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+{{- else }}
+apiVersion: apps/v1
+kind: Deployment
+{{- end }}
+metadata:
+  name: {{ include "medzo.fullname" . }}
+  labels:
+    {{- include "medzo.componentLabels" $api | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "medzo.componentSelectorLabels" $api | nindent 6 }}
+  template:
+    {{- include "medzo.api.podTemplate" . | nindent 4 }}
+  {{- if .Values.rollout.enabled }}
+  strategy:
+    canary:
+      # Never drop below the full replica count during a release
+      maxUnavailable: 0
+      maxSurge: 1
+      {{- if .Values.rollout.analysis.enabled }}
+      # Runs in the background from the first step; a failed check aborts the
+      # rollout and Argo scales the canary back to the stable version.
+      analysis:
+        templates:
+          - templateName: {{ include "medzo.fullname" . }}-canary-health
+        startingStep: 1
+        args:
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+      {{- end }}
+      steps:
+        {{- toYaml .Values.rollout.steps | nindent 8 }}
+  {{- else }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  {{- end }}

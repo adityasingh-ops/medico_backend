@@ -1,0 +1,38 @@
+{{- if and .Values.rollout.enabled .Values.rollout.analysis.enabled }}
+{{- $a := .Values.rollout.analysis }}
+# Canary health check, adapted from the Argo Rollouts Prometheus example:
+# https://argoproj.github.io/argo-rollouts/analysis/prometheus/
+# Only the canary pods are measured: the ServiceMonitor copies the
+# rollouts-pod-template-hash pod label onto every metric.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "medzo.fullname" . }}-canary-health
+  labels:
+    {{- include "medzo.labels" . | nindent 4 }}
+spec:
+  args:
+    - name: canary-hash
+  metrics:
+    - name: success-rate
+      interval: {{ $a.interval }}
+      failureLimit: {{ $a.failureLimit }}
+      # No traffic yet gives NaN: treat it as passing, not failing.
+      successCondition: isNaN(result[0]) || result[0] >= {{ $a.successRate }}
+      provider:
+        prometheus:
+          address: {{ $a.prometheusAddress }}
+          query: |
+            sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}",rollouts_pod_template_hash="{{ "{{" }}args.canary-hash{{ "}}" }}",status_code!~"5.."}[1m]))
+            /
+            sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}",rollouts_pod_template_hash="{{ "{{" }}args.canary-hash{{ "}}" }}"}[1m]))
+    - name: p95-latency
+      interval: {{ $a.interval }}
+      failureLimit: {{ $a.failureLimit }}
+      successCondition: isNaN(result[0]) || result[0] <= {{ $a.p95LatencySeconds }}
+      provider:
+        prometheus:
+          address: {{ $a.prometheusAddress }}
+          query: |
+            histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace="{{ .Release.Namespace }}",rollouts_pod_template_hash="{{ "{{" }}args.canary-hash{{ "}}" }}"}[1m])))
+{{- end }}
